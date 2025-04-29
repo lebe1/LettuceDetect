@@ -5,6 +5,9 @@ from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 from lettucedetect.datasets.hallucination_dataset import HallucinationDataset
 
+import re
+from difflib import SequenceMatcher
+
 PROMPT_QA = """
 Briefly answer the following question:
 {question}
@@ -200,19 +203,65 @@ class TransformerDetector(BaseDetector):
         """
         prompt = self._form_prompt(context, question)
         return self._predict(prompt, answer, output_format)
+    
+
+class RuleBasedDetector(BaseDetector):
+    def __init__(self):
+        pass
+
+    def predict(self, context: list[str], answer: str, output_format: str = "spans") -> list:
+        context_str = " ".join(context).lower()
+
+        if output_format == "spans":
+            spans = []
+            for match in re.finditer(r'[^.?!]+[.?!]', answer):
+                sentence = match.group().strip()
+                sentence_lower = sentence.lower()
+
+                if sentence_lower not in context_str and self._fuzzy_match(sentence_lower, context_str) < 0.85:
+                    spans.append({
+                        "text": sentence,
+                        "start": match.start(),
+                        "end": match.end(),
+                        "confidence": 0.99
+                    })
+            return spans
+
+        elif output_format == "tokens":
+            token_outputs = []
+            for match in re.finditer(r'\b\w+\b', answer):
+                token = match.group()
+                token_lower = token.lower()
+                is_hallucinated = token_lower not in context_str and self._fuzzy_match(token_lower, context_str) < 0.85
+
+                token_outputs.append({
+                    "token": token,
+                    "pred": int(is_hallucinated),
+                    "prob": 0.99 if is_hallucinated else 0.01
+                })
+            return token_outputs
+
+        else:
+            raise ValueError("Invalid output_format. Use 'tokens' or 'spans'.")
+
+    def _fuzzy_match(self, s1: str, s2: str) -> float:
+        return SequenceMatcher(None, s1, s2).ratio()
+
 
 
 class HallucinationDetector:
     def __init__(self, method: str = "transformer", **kwargs):
         """Facade for the hallucination detector.
 
-        :param method: "transformer" for the model-based approach.
+        :param method: "transformer" for the model-based approach, "rule" for the rule-based approach
         :param kwargs: Additional keyword arguments passed to the underlying detector.
         """
         if method == "transformer":
             self.detector = TransformerDetector(**kwargs)
+        elif method == "rule":
+            self.detector = RuleBasedDetector()
         else:
-            raise ValueError("Unsupported method. Choose 'transformer'.")
+            raise ValueError("Unsupported method. Choose 'transformer' or 'rule'.")
 
     def predict(
         self,
