@@ -10,7 +10,10 @@ from transformers import (
     DataCollatorForTokenClassification,
 )
 
-from lettucedetect.datasets.hallucination_dataset import HallucinationData, HallucinationDataset
+from lettucedetect.datasets.hallucination_dataset import (
+    HallucinationData,
+    HallucinationDataset,
+)
 from lettucedetect.models.evaluator import (
     evaluate_detector_char_level,
     evaluate_model,
@@ -63,6 +66,22 @@ def evaluate_task_samples(
         return metrics
 
 
+def load_data(data_path):
+    data_path = Path(data_path)
+    hallucination_data = HallucinationData.from_json(json.loads(data_path.read_text()))
+
+    # Filter test samples from the data
+    test_samples = [sample for sample in hallucination_data.samples if sample.split == "test"]
+
+    # group samples by task type
+    task_type_map = {}
+    for sample in test_samples:
+        if sample.task_type not in task_type_map:
+            task_type_map[sample.task_type] = []
+        task_type_map[sample.task_type].append(sample)
+    return test_samples, task_type_map
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a hallucination detection model")
     parser.add_argument("--model_path", type=str, required=True, help="Path to the saved model")
@@ -84,20 +103,10 @@ def main():
         default=8,
         help="Batch size for evaluation",
     )
+
     args = parser.parse_args()
 
-    data_path = Path(args.data_path)
-    hallucination_data = HallucinationData.from_json(json.loads(data_path.read_text()))
-
-    # Filter test samples from the data
-    test_samples = [sample for sample in hallucination_data.samples if sample.split == "test"]
-
-    # group samples by task type
-    task_type_map = {}
-    for sample in test_samples:
-        if sample.task_type not in task_type_map:
-            task_type_map[sample.task_type] = []
-        task_type_map[sample.task_type].append(sample)
+    test_samples, task_type_map = load_data(args.data_path)
 
     print(f"\nEvaluating model on test samples: {len(test_samples)}")
 
