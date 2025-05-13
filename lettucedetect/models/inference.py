@@ -94,55 +94,6 @@ class TransformerDetector(BaseDetector):
                 question=question, num_passages=len(context), context=context_str
             )
 
-    def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:
-        """Predict hallucination tokens or spans from the provided prompt and answer.
-
-        :param prompt: The prompt string.
-        :param answer: The answer string.
-        :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
-        """
-        return self._predict(prompt, answer, output_format)
-
-    def predict(
-        self,
-        context: list[str],
-        answer: str,
-        question: str | None = None,
-        output_format: str = "tokens",
-    ) -> list:
-        """Predict hallucination tokens or spans from the provided context, answer, and question.
-        This is a useful interface when we don't want to predict a specific prompt, but rather we have a list of contexts, answers, and questions. Useful to interface with RAG systems.
-
-        :param context: A list of context strings.
-        :param answer: The answer string.
-        :param question: The question string.
-        :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
-        """
-
-        print("Entered predict method in Transformer class")
-
-        prompt = self._form_prompt(context, question)
-        return self._predict(prompt, answer, output_format)
-
-
-
-class TransformerDetector(BaseDetector):
-    def __init__(self, model_path: str, max_length: int = 4096, device=None, **kwargs):
-        """Initialize the TransformerDetector.
-
-        :param model_path: The path to the model.
-        :param max_length: The maximum length of the input sequence.
-        :param device: The device to run the model on.
-        """
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path, **kwargs)
-        self.model = AutoModelForTokenClassification.from_pretrained(model_path, **kwargs)
-        self.max_length = max_length
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
-        self.model.eval()
-
-
-
     def _predict(self, context: str, answer: str, output_format: str = "tokens") -> list:
         """Predict hallucination tokens or spans from the provided context and answer.
 
@@ -250,80 +201,33 @@ class TransformerDetector(BaseDetector):
             return spans
         else:
             raise ValueError("Invalid output_format. Use 'tokens' or 'spans'.")
-    
 
-class RuleBasedDetector(BaseDetector):
-    def __init__(self):
-        pass
+    def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:
+        """Predict hallucination tokens or spans from the provided prompt and answer.
 
-    def _predict(self, context: list[str], answer: str, output_format: str = "spans") -> list:
+        :param prompt: The prompt string.
+        :param answer: The answer string.
+        :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
         """
-        Perform rule-based hallucination detection on the answer, comparing it to the provided context.
+        return self._predict(prompt, answer, output_format)
 
-        :param context: A list of context strings to compare against.
-        :param answer: The generated answer string to evaluate.
-        :param output_format: Output format - either 'spans' (sentence-level) or 'tokens' (word-level).
-        :return: A list of hallucination spans or tokens, each with confidence scores.
+    def predict(
+        self,
+        context: list[str],
+        answer: str,
+        question: str | None = None,
+        output_format: str = "tokens",
+    ) -> list:
+        """Predict hallucination tokens or spans from the provided context, answer, and question.
+        This is a useful interface when we don't want to predict a specific prompt, but rather we have a list of contexts, answers, and questions. Useful to interface with RAG systems.
+
+        :param context: A list of context strings.
+        :param answer: The answer string.
+        :param question: The question string.
+        :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
         """
-        # Normalize and join context into a single lowercase string for easier comparison.
-        context_str = " ".join(context).lower()
-
-        if output_format == "spans":
-            spans = []
-            # Iterate over all sentence-like segments in the answer.
-            for match in re.finditer(r'[^.?!]+[.?!]', answer):
-                sentence = match.group().strip()
-                sentence_lower = sentence.lower()
-
-                # Check for hallucination using exact and fuzzy match heuristics.
-                if sentence_lower not in context_str and self._fuzzy_levenshtein(sentence_lower, context_str) < SEQUENCE_MATCH_THRESHOLD:
-                    spans.append({
-                        "text": sentence,
-                        "start": match.start(),
-                        "end": match.end(),
-                        "confidence": 0.99
-                    })
-            return spans
-
-        elif output_format == "tokens":
-            token_outputs = []
-            # Check each word-level token in the answer.
-            for match in re.finditer(r'\b\w+\b', answer):
-                token = match.group()
-                token_lower = token.lower()
-                is_hallucinated = token_lower not in context_str and self._fuzzy_levenshtein(token_lower, context_str) < SEQUENCE_MATCH_THRESHOLD
-
-                token_outputs.append({
-                    "token": token,
-                    "pred": int(is_hallucinated),
-                    "prob": 0.99 if is_hallucinated else 0.01
-                })
-            return token_outputs
-
-        else:
-            raise ValueError("Invalid output_format. Use 'tokens' or 'spans'.")
-
-    def _fuzzy_sequence_matcher(self, s1: str, s2: str) -> float:
-        """
-        Compute a fuzzy similarity ratio between two strings using SequenceMatcher.
-
-        :param s1: First string (usually the sentence or token).
-        :param s2: Second string (typically the full context).
-        :return: A float similarity ratio between 0.0 and 1.0.
-        """
-        return SequenceMatcher(None, s1, s2).ratio()
-    
-    def _fuzzy_levenshtein(self, s1: str, s2: str) -> float:
-        """
-        Compute a fuzzy similarity ratio between two strings using Levenshtein.
-
-        :param s1: First string (usually the sentence or token).
-        :param s2: Second string (typically the full context).
-        :return: A float similarity ratio between 0.0 and 1.0.
-        """
-        print("Levenshtein entered")
-        return  Levenshtein.ratio(s1, s2)
-
+        prompt = self._form_prompt(context, question)
+        return self._predict(prompt, answer, output_format)
 
 
 # ==== LLM-based detector ====
@@ -589,21 +493,144 @@ class LLMDetector(BaseDetector):
         return self._predict(prompt, answer, output_format=output_format)
 
 
+# ==== Rule-based detector ====
+class RuleBasedDetector(BaseDetector):
+    def __init__(
+            self,
+            lang: Literal["en", "de", "fr", "es", "it", "pl"] = "en",
+                 ):
+        """Initialize the RuleBasedDetector.
+
+        :param lang: The language of the model.
+        """
+        if lang not in LANG_TO_PASSAGE:
+            raise ValueError(f"Invalid language. Use one of: {', '.join(LANG_TO_PASSAGE.keys())}")
+
+        self.lang = lang
+
+        prompt_path = Path(__file__).parent.parent / "prompts" / f"qa_prompt_{lang.lower()}.txt"
+        self.prompt_qa = Template(prompt_path.read_text(encoding="utf-8"))
+        prompt_path = (
+            Path(__file__).parent.parent / "prompts" / f"summary_prompt_{lang.lower()}.txt"
+        )
+        self.prompt_summary = Template(prompt_path.read_text(encoding="utf-8"))
+
+    def _predict(self, context: list[str], answer: str, output_format: str = "spans") -> list:
+        """
+        Perform rule-based hallucination detection on the answer, comparing it to the provided context.
+
+        :param context: A list of context strings to compare against.
+        :param answer: The generated answer string to evaluate.
+        :param output_format: Output format - either 'spans' (sentence-level) or 'tokens' (word-level).
+        :return: A list of hallucination spans or tokens, each with confidence scores.
+        """
+        # Tokenize context for better comparison.
+        # context_str = re.sub(r'[^\w\s]', '', " ".join(context).lower())
+        context_str = " ".join(context).lower()
+
+        if output_format == "spans":
+            spans = []
+            # Iterate over all sentence-like segments in the answer.
+            for match in re.finditer(r'[^.?!]+[.?!]', answer):
+                sentence = match.group().strip()
+                sentence_lower = sentence.lower()
+                print("SENTENCE", sentence_lower)
+                print("CONTEXT", context_str)
+
+                # Check for hallucination using exact and fuzzy match heuristics.
+                if sentence_lower not in context_str and self._fuzzy_sequence_matcher(sentence_lower, context_str) < SEQUENCE_MATCH_THRESHOLD:
+                    spans.append({
+                        "text": sentence,
+                        "start": match.start(),
+                        "end": match.end(),
+                        "confidence": 0.99
+                    })
+            return spans
+
+        elif output_format == "tokens":
+            token_outputs = []
+            # Check each word-level token in the answer.
+            for match in re.finditer(r'\b\w+\b', answer):
+                token = match.group()
+                token_lower = token.lower()
+                is_hallucinated = token_lower not in context_str and self._fuzzy_sequence_matcher(token_lower, context_str) < SEQUENCE_MATCH_THRESHOLD
+
+                token_outputs.append({
+                    "token": token,
+                    "pred": int(is_hallucinated),
+                    "prob": 0.99 if is_hallucinated else 0.01
+                })
+            return token_outputs
+
+        else:
+            raise ValueError("Invalid output_format. Use 'tokens' or 'spans'.")
+
+    def _fuzzy_sequence_matcher(self, s1: str, s2: str) -> float:
+        """
+        Compute a fuzzy similarity ratio between two strings using SequenceMatcher.
+
+        :param s1: First string (usually the sentence or token).
+        :param s2: Second string (typically the full context).
+        :return: A float similarity ratio between 0.0 and 1.0.
+        """
+        print("Using SequenceMatcher")
+        return SequenceMatcher(None, s1, s2).ratio()
+    
+    def _fuzzy_levenshtein(self, s1: str, s2: str) -> float:
+        """
+        Compute a fuzzy similarity ratio between two strings using Levenshtein.
+
+        :param s1: First string (usually the sentence or token).
+        :param s2: Second string (typically the full context).
+        :return: A float similarity ratio between 0.0 and 1.0.
+        """
+        print("Using Levenshtein")
+        return  Levenshtein.ratio(s1, s2)
+    
+    def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:
+        """Predict hallucination spans from the provided prompt and answer.
+
+        :param prompt: The prompt string.
+        :param answer: The answer string.
+        :param output_format: "spans" to return grouped spans.
+        """
+        return self._predict([prompt], answer, output_format)
+    
+    def predict(
+        self,
+        context: list[str],
+        answer: str,
+        question: str | None = None,
+        output_format: str = "tokens",
+    ) -> list:
+        """Predict hallucination tokens or spans from the provided context, answer, and question.
+        This is a useful interface when we don't want to predict a specific prompt, but rather we have a list of contexts, answers, and questions. Useful to interface with RAG systems.
+
+        :param context: A list of context strings.
+        :param answer: The answer string.
+        :param question: The question string.
+        :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
+        """
+
+        print("Entered predict method in Rule-based class")
+        return self._predict(context, answer, output_format)
+
+
 class HallucinationDetector:
     def __init__(self, method: str = "transformer", **kwargs):
         """Facade for the hallucination detector.
 
-        :param method: "transformer" for the model-based approach, "rule" for the rule-based approach
+        :param method: "transformer" for the model-based approach, "rule" for the rule-based approach, "llm" for the LLM-based approach
         :param kwargs: Additional keyword arguments passed to the underlying detector.
         """
         if method == "transformer":
             self.detector = TransformerDetector(**kwargs)
         elif method == "rule":
-            self.detector = RuleBasedDetector(**kwargs)
+            self.detector = RuleBasedDetector()
         elif method == "llm":
             self.detector = LLMDetector(**kwargs)
         else:
-            raise ValueError("Unsupported method. Choose 'transformer' or 'llm'.")
+            raise ValueError("Unsupported method. Choose 'transformer', 'rule or 'llm'.")
 
     def predict(
         self,
@@ -619,7 +646,6 @@ class HallucinationDetector:
         :param answer: The answer string.
         :param question: The question string.
         """
-        print("PREDICT method Hallucination class")
         return self.detector.predict(context, answer, question, output_format)
 
     def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:
