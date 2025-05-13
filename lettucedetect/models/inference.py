@@ -527,6 +527,7 @@ class RuleBasedDetector(BaseDetector):
         # Tokenize context for better comparison.
         # context_str = re.sub(r'[^\w\s]', '', " ".join(context).lower())
         context_str = " ".join(context).lower()
+        #print("CONTEXT", context_str)
 
         if output_format == "spans":
             spans = []
@@ -534,8 +535,7 @@ class RuleBasedDetector(BaseDetector):
             for match in re.finditer(r'[^.?!]+[.?!]', answer):
                 sentence = match.group().strip()
                 sentence_lower = sentence.lower()
-                print("SENTENCE", sentence_lower)
-                print("CONTEXT", context_str)
+                #print("SENTENCE", sentence_lower)
 
                 # Check for hallucination using exact and fuzzy match heuristics.
                 if sentence_lower not in context_str and self._fuzzy_sequence_matcher(sentence_lower, context_str) < SEQUENCE_MATCH_THRESHOLD:
@@ -553,6 +553,7 @@ class RuleBasedDetector(BaseDetector):
             for match in re.finditer(r'\b\w+\b', answer):
                 token = match.group()
                 token_lower = token.lower()
+                #print("TOKEN", token_lower)
                 is_hallucinated = token_lower not in context_str and self._fuzzy_sequence_matcher(token_lower, context_str) < SEQUENCE_MATCH_THRESHOLD
 
                 token_outputs.append({
