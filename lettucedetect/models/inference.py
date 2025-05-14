@@ -574,7 +574,6 @@ class RuleBasedDetector(BaseDetector):
         :param s2: Second string (typically the full context).
         :return: A float similarity ratio between 0.0 and 1.0.
         """
-        print("Using SequenceMatcher")
         return SequenceMatcher(None, s1, s2).ratio()
     
     def _fuzzy_levenshtein(self, s1: str, s2: str) -> float:
@@ -585,7 +584,6 @@ class RuleBasedDetector(BaseDetector):
         :param s2: Second string (typically the full context).
         :return: A float similarity ratio between 0.0 and 1.0.
         """
-        print("Using Levenshtein")
         return  Levenshtein.ratio(s1, s2)
     
     def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:

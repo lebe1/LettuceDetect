@@ -11,7 +11,8 @@ from lettucedetect.datasets.hallucination_dataset import (
 
 from lettucedetect.models.evaluator import (
     evaluate_detector_char_level,
-    evaluate_detector_example_level
+    evaluate_detector_example_level,
+    evaluate_detector_token_level
 )
 
 from lettucedetect.models.inference import HallucinationDetector
@@ -27,10 +28,11 @@ def evaluate_task_samples(
         print("\n---- Example-Level Span Evaluation ----")
         metrics = evaluate_detector_example_level(detector, samples)
         return metrics
-    ## TODO implement elif case for token level method for HallucinationDetector class in evaluator.py
-
-
-    else:  # char_level
+    elif evaluation_type == "token_level":
+        print("\n---- Token-Level Span Evaluation ----")
+        metrics = evaluate_detector_token_level(detector, samples)
+        return metrics
+    else:  
         print("\n---- Character-Level Span Evaluation ----")
         metrics = evaluate_detector_char_level(detector, samples)
         print(f"  Precision: {metrics['precision']:.4f}")
