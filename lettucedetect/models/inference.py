@@ -525,9 +525,8 @@ class RuleBasedDetector(BaseDetector):
         :return: A list of hallucination spans or tokens, each with confidence scores.
         """
         # Tokenize context for better comparison.
-        # context_str = re.sub(r'[^\w\s]', '', " ".join(context).lower())
         context_str = " ".join(context).lower()
-        #print("CONTEXT", context_str)
+        number_hallucinations = self._detect_number_hallucinations(context_str, answer)
 
         if output_format == "spans":
             spans = []
@@ -535,15 +534,29 @@ class RuleBasedDetector(BaseDetector):
             for match in re.finditer(r'[^.?!]+[.?!]', answer):
                 sentence = match.group().strip()
                 sentence_lower = sentence.lower()
-                #print("SENTENCE", sentence_lower)
+                sentence_numbers = self._extract_numbers(sentence)
 
-                # Check for hallucination using exact and fuzzy match heuristics.
-                if sentence_lower not in context_str and self._fuzzy_sequence_matcher(sentence_lower, context_str) < SEQUENCE_MATCH_THRESHOLD:
+                fuzzy_match_score = self._fuzzy_sequence_matcher(sentence_lower, context_str)
+
+                ## TODO improve line here since not every sentence in answer has to be part of context
+                is_hallucinated = sentence_lower not in context_str and fuzzy_match_score < SEQUENCE_MATCH_THRESHOLD
+
+                has_number_hallucination = any(n in number_hallucinations for n in sentence_numbers)
+
+
+                if has_number_hallucination:
                     spans.append({
                         "text": sentence,
                         "start": match.start(),
                         "end": match.end(),
-                        "confidence": 0.99
+                        "confidence": 1
+                    })
+                elif is_hallucinated:
+                    spans.append({
+                        "text": sentence,
+                        "start": match.start(),
+                        "end": match.end(),
+                        "confidence": 1 - fuzzy_match_score
                     })
             return spans
 
@@ -553,14 +566,27 @@ class RuleBasedDetector(BaseDetector):
             for match in re.finditer(r'\b\w+\b', answer):
                 token = match.group()
                 token_lower = token.lower()
-                #print("TOKEN", token_lower)
-                is_hallucinated = token_lower not in context_str and self._fuzzy_sequence_matcher(token_lower, context_str) < SEQUENCE_MATCH_THRESHOLD
+                fuzzy_match_score = self._fuzzy_sequence_matcher(token_lower, context_str)
 
-                token_outputs.append({
-                    "token": token,
-                    "pred": int(is_hallucinated),
-                    "prob": 0.99 if is_hallucinated else 0.01
-                })
+                ## TODO improve line here since not every word in answer has to be part of context
+                is_hallucinated = token_lower not in context_str and fuzzy_match_score < SEQUENCE_MATCH_THRESHOLD 
+                has_number_hallucination = token_lower in number_hallucinations
+
+                # Check for number hallucination first, since variable is_hallucinated might be true as well in hallucinated number case
+                if has_number_hallucination: 
+                    token_outputs.append({
+                        "token": token,
+                        "pred": 1,
+                        "prob": 1
+                    })
+                else:
+                    token_outputs.append({
+                        "token": token,
+                        "pred": int(is_hallucinated),
+                        "prob": 1 - fuzzy_match_score if is_hallucinated else 0.01
+                    })
+
+                
             return token_outputs
 
         else:
@@ -613,6 +639,26 @@ class RuleBasedDetector(BaseDetector):
 
         print("Entered predict method in Rule-based class")
         return self._predict(context, answer, output_format)
+    
+    def _extract_numbers(self, text: str) -> set:
+        # This regex pattern checks first for numbers like 1,222.59; second for 0.12; third for 4,12; forth for common digits
+        number_pattern = r'\d+\,\d+\.\d+|\d+\.\d+|\d+\,\d+|\d+'
+        matches = re.findall(number_pattern, text)
+        numbers = set()
+        for m in matches:
+            numbers.add(m)
+        return numbers
+
+    def _detect_number_hallucinations(self, context: str, answer: str) -> set:
+        context_numbers = self._extract_numbers(context)
+        answer_numbers = self._extract_numbers(answer)
+
+        hallucinated = set()
+        for num in answer_numbers:
+           if not any((num == ctx_num) for ctx_num in context_numbers):
+                hallucinated.add(num)
+
+        return hallucinated
 
 
 class HallucinationDetector:
