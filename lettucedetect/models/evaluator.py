@@ -315,14 +315,18 @@ def evaluate_detector_example_level(
         pred_example_label = 1 if predicted_spans else 0
 
         if "Hillary Clinton surprised the world with the unconventional way she launched her campaign" in answer:
-            print("Predicted spans", predicted_spans)
-            print("Gold spans", gold_spans)
+            print("Original prompt", prompt)
+            print("\nOriginal answer", answer)
+            print("\nPredicted spans", predicted_spans)
+            print("\nGold spans", gold_spans)
 
         if "The FBI has charged a Philadelphia woman, Keonna Thomas, with trying to travel overseas to fight for ISIS." in answer:
+            print("Original prompt", prompt)
             print("Predicted spans", predicted_spans)
             print("Gold spans", gold_spans)
 
         if "Blue Bell ice cream has temporarily shut down one of its manufacturing plants after discovering listeria contamination in" in answer:
+            print("Original prompt", prompt) 
             print("Predicted spans", predicted_spans)
             print("Gold spans", gold_spans)
 
