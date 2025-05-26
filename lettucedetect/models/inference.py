@@ -34,7 +34,7 @@ LANG_TO_PASSAGE = {
     "pl": "fragment",
 }
 
-SEQUENCE_MATCH_THRESHOLD = 0.8
+SEQUENCE_MATCH_THRESHOLD = 0.6
 ROUGE_PRECISION_THRESHOLD = 0.3
 
 
@@ -317,7 +317,6 @@ class LLMDetector(BaseDetector):
         )
 
         self.template = Template(template_path.read_text(encoding="utf-8"))
-        self.prompt_qa = Template(prompt_qa_path.read_text(encoding="utf-8"))
         self.prompt_summary = Template(prompt_summary_path.read_text(encoding="utf-8"))
 
         self.fewshot = json.loads(fewshot_path.read_text(encoding="utf-8"))
@@ -534,6 +533,12 @@ class RuleBasedDetector(BaseDetector):
         # Tokenize context for better comparison.
         context_str = " ".join(context).lower()
         number_hallucinations = self._detect_number_hallucinations(context_str, answer)
+        context_sentences = [
+            s.strip().lower()
+            for ctx in context
+            for s in re.split(r'(?<=[.?!])\s+', ctx)
+            if s.strip()
+        ]
 
         if output_format == "spans":
             spans = []
@@ -547,7 +552,15 @@ class RuleBasedDetector(BaseDetector):
 
                 is_hallucinated = sentence_lower not in context_str and fuzzy_match_score < SEQUENCE_MATCH_THRESHOLD
 
+
+                # Compare with each context sentence and store highest similarity
+                # max_similarity = max(
+                #     self._fuzzy_sequence_matcher(sentence_lower, ctx_sent)
+                #     for ctx_sent in context_sentences
+                # ) if context_sentences else 0.0
+
                 has_number_hallucination = any(n in number_hallucinations for n in sentence_numbers)
+                # is_hallucinated = max_similarity < SEQUENCE_MATCH_THRESHOLD
 
 
                 if has_number_hallucination:
@@ -563,6 +576,7 @@ class RuleBasedDetector(BaseDetector):
                         "start": match.start(),
                         "end": match.end(),
                         "confidence": 1 - fuzzy_match_score
+                        # "confidence": 1 - max_similarity
                     })
             return spans
 
