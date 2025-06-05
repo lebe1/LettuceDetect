@@ -84,10 +84,8 @@ def main():
     test_samples, task_type_map = load_data(args.data_path)
 
     print(f"\nEvaluating model on test samples: {len(test_samples)}")
-    model, tokenizer, device = None, None, None
-
         
-    detector = HallucinationDetector(method="rule")
+    detector = HallucinationDetector(method="semantic")
 
     # Evaluate each task type separately
     for task_type, samples in task_type_map.items():

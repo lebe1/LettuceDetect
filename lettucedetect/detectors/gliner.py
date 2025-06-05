@@ -13,8 +13,10 @@ class GLiNERBasedDetector(BaseDetector):
         return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
     def _get_entities(self, text: str) -> set:
-        entities = self.model.predict_entities(text)
+        labels = ["person", "organization", "location", "date", "product", "event"]  # or any labels you want
+        entities = self.model.predict_entities(text, labels)
         return {e["text"] for e in entities}
+
 
     def _predict(self, context: list[str], answer: str, output_format: str = "spans") -> list:
         context_text = " ".join(context)
