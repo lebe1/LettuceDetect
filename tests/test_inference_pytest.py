@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from lettucedetect.detectors.prompt_utils import PromptUtils
-from lettucedetect.detectors.transformer import TransformerDetector
+from lettucedetect.detectors.transformer import TransformerDetector, RuleBasedDetector
 from lettucedetect.models.inference import HallucinationDetector
 
 
@@ -26,6 +26,63 @@ def mock_model():
     mock_output.logits = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.3, 0.7]]])
     model.return_value = mock_output
     return model
+
+
+class TestRuleBasedDetector:
+    """Tests for the RuleBasedDetector class."""
+
+    @pytest.fixture
+    def detector(self):
+        return RuleBasedDetector()
+
+    @pytest.fixture
+    def context(self):
+        return [
+            "France is a country in Europe.",
+            "The capital of France is Paris.",
+            "The population of France is 67 million."
+        ]
+
+    @pytest.fixture
+    def answer(self):
+        return "The capital of France is Paris. The population of France is 69 million."
+
+    def test_predict_spans_format(self, detector, context, answer):
+        predictions = detector.predict(context=context, answer=answer, output_format="spans")
+        assert isinstance(predictions, list)
+
+        for span in predictions:
+            assert isinstance(span, dict)
+            assert "text" in span
+            assert "start" in span
+            assert "end" in span
+            assert "confidence" in span
+
+            assert isinstance(span["text"], str)
+            assert isinstance(span["start"], int)
+            assert isinstance(span["end"], int)
+            assert isinstance(span["confidence"], float)
+            assert 0.0 <= span["confidence"] <= 1.0
+
+    def test_predict_tokens_format(self, detector, context, answer):
+        predictions = detector.predict(context=context, answer=answer, output_format="tokens")
+        assert isinstance(predictions, list)
+
+        for token in predictions:
+            assert isinstance(token, dict)
+            assert "token" in token
+            assert "pred" in token
+            assert "prob" in token
+
+            assert isinstance(token["token"], str)
+            assert isinstance(token["pred"], int)
+            assert token["pred"] in [0, 1]
+            assert isinstance(token["prob"], float)
+            assert 0.0 <= token["prob"] <= 1.0
+
+    def test_invalid_output_format(self, detector, context, answer):
+        with pytest.raises(ValueError, match="Invalid output_format"):
+            detector.predict(context, answer, output_format="invalid_format")
 
 
 class TestHallucinationDetector:
