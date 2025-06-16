@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
+import time
+
 
 
 
@@ -39,6 +41,17 @@ def evaluate_task_samples(
         print(f"  Recall: {metrics['recall']:.4f}")
         print(f"  F1: {metrics['f1']:.4f}")
         return metrics
+
+def evaluate_task_samples_with_runtime(
+    samples,
+    evaluation_type,
+    detector=None,
+):
+    start_time = time.time()
+    metrics = evaluate_task_samples(samples, evaluation_type, detector)
+    elapsed_time = time.time() - start_time
+    return metrics, elapsed_time
+
 
 
 def load_data(data_path):
@@ -85,7 +98,7 @@ def main():
 
     print(f"\nEvaluating model on test samples: {len(test_samples)}")
         
-    detector = HallucinationDetector(method="semantic")
+    detector = HallucinationDetector(method="embedding")
 
     # Evaluate each task type separately
     for task_type, samples in task_type_map.items():
