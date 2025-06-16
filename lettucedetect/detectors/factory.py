@@ -49,7 +49,7 @@ def make_detector(method: str, **kwargs) -> BaseDetector:
     elif method == "embedding":
         from lettucedetect.detectors.embedding import StaticEmbeddingDetector
 
-        return StaticEmbeddingDetector()
+        return StaticEmbeddingDetector(**kwargs)
 
     else:
         raise ValueError(f"Unknown detector method: {method}. Use one of: transformer, llm")
