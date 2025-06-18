@@ -50,6 +50,11 @@ def make_detector(method: str, **kwargs) -> BaseDetector:
         from lettucedetect.detectors.embedding import StaticEmbeddingDetector
 
         return StaticEmbeddingDetector(**kwargs)
+    
+    elif method == "entity":
+        from lettucedetect.detectors.entity import EntitySimilarityDetector
+
+        return EntitySimilarityDetector()
 
     else:
         raise ValueError(f"Unknown detector method: {method}. Use one of: transformer, llm")
