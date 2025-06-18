@@ -55,6 +55,11 @@ def make_detector(method: str, **kwargs) -> BaseDetector:
         from lettucedetect.detectors.entity import EntitySimilarityDetector
 
         return EntitySimilarityDetector()
+    
+    elif method == "rouge_lemmatization":
+        from lettucedetect.detectors.rouge_lemmatization import RougeLemmaBasedDetector
+
+        return RougeLemmaBasedDetector()
 
     else:
         raise ValueError(f"Unknown detector method: {method}. Use one of: transformer, llm")
