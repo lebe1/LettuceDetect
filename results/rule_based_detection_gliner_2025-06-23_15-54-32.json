@@ -1,0 +1,75 @@
+{
+  "model": "gliner",
+  "evaluation_type": "example_level",
+  "task_metrics": {
+    "Summary": {
+      "metrics": {
+        "supported": {
+          "precision": 0.7288135593220338,
+          "recall": 0.0617816091954023,
+          "f1": 0.11390728476821192
+        },
+        "hallucinated": {
+          "precision": 0.2235434007134364,
+          "recall": 0.9215686274509803,
+          "f1": 0.3598086124401914
+        },
+        "auroc": 0.49167511832319133,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.7288    0.0618    0.1139       696\nHallucinated     0.2235    0.9216    0.3598       204\n\n    accuracy                         0.2567       900\n   macro avg     0.4762    0.4917    0.2369       900\nweighted avg     0.6143    0.2567    0.1696       900\n"
+      },
+      "runtime_seconds": 1783.8412446975708
+    },
+    "Data2txt": {
+      "metrics": {
+        "supported": {
+          "precision": 0.4,
+          "recall": 0.006230529595015576,
+          "f1": 0.012269938650306749
+        },
+        "hallucinated": {
+          "precision": 0.6435754189944134,
+          "recall": 0.9948186528497409,
+          "f1": 0.7815468113975577
+        },
+        "auroc": 0.5005245912223782,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.4000    0.0062    0.0123       321\nHallucinated     0.6436    0.9948    0.7815       579\n\n    accuracy                         0.6422       900\n   macro avg     0.5218    0.5005    0.3969       900\nweighted avg     0.5567    0.6422    0.5072       900\n"
+      },
+      "runtime_seconds": 2134.0939955711365
+    },
+    "QA": {
+      "metrics": {
+        "supported": {
+          "precision": 0.8387096774193549,
+          "recall": 0.3162162162162162,
+          "f1": 0.4592737978410206
+        },
+        "hallucinated": {
+          "precision": 0.18518518518518517,
+          "recall": 0.71875,
+          "f1": 0.29449423815621
+        },
+        "auroc": 0.5174831081081082,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.8387    0.3162    0.4593       740\nHallucinated     0.1852    0.7188    0.2945       160\n\n    accuracy                         0.3878       900\n   macro avg     0.5119    0.5175    0.3769       900\nweighted avg     0.7225    0.3878    0.4300       900\n"
+      },
+      "runtime_seconds": 1386.8946423530579
+    },
+    "whole_dataset": {
+      "metrics": {
+        "supported": {
+          "precision": 0.8134110787172012,
+          "recall": 0.15879339783722254,
+          "f1": 0.26571428571428574
+        },
+        "hallucinated": {
+          "precision": 0.3729316928298685,
+          "recall": 0.9321314952279958,
+          "f1": 0.5327272727272727
+        },
+        "auroc": 0.5454624465326092,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.8134    0.1588    0.2657      1757\nHallucinated     0.3729    0.9321    0.5327       943\n\n    accuracy                         0.4289      2700\n   macro avg     0.5932    0.5455    0.3992      2700\nweighted avg     0.6596    0.4289    0.3590      2700\n"
+      },
+      "runtime_seconds": 5137.950162410736
+    }
+  },
+  "total_runtime_seconds": 10442.780045032501
+}

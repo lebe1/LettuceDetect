@@ -1,18 +1,28 @@
 import argparse
 import json
-import datetime
+from datetime import datetime
 from pathlib import Path
 
 from evaluate_rule import load_data, evaluate_task_samples_with_runtime
 from lettucedetect.detectors.embedding import StaticEmbeddingDetector
 from lettucedetect.detectors.rouge import RougeBasedDetector
+from lettucedetect.detectors.entity import EntitySimilarityDetector
+from lettucedetect.detectors.fuzzy import FuzzyBasedDetector
+from lettucedetect.detectors.gliner import GLiNERBasedDetector
+from lettucedetect.detectors.rouge_lemmatization import RougeLemmaBasedDetector
+from lettucedetect.detectors.semantic import SemanticBasedDetector
 
 
 def get_detectors():
     """Initialize both detectors."""
     return {
-        "rouge": RougeBasedDetector(),
-        "embedding": StaticEmbeddingDetector(),
+        # "rouge": RougeBasedDetector(),
+        # "embedding": StaticEmbeddingDetector(),
+        # "entity": EntitySimilarityDetector(),
+        "fuzzy": FuzzyBasedDetector(),
+        "gliner": GLiNERBasedDetector(),
+        "rouge_lemmatization": RougeLemmaBasedDetector(),
+        "semantic": SemanticBasedDetector(),
     }
 
 
@@ -26,8 +36,9 @@ def save_results(base_output_path, model_method, evaluation_type, all_metrics, t
         "total_runtime_seconds": total_runtime,
     }
 
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_path = Path(base_output_path)
-    output_path = output_path.with_name(f"{output_path.stem}_{model_method}{output_path.suffix}")
+    output_path = output_path.with_name(f"{output_path.stem}_{model_method}_{timestamp}{output_path.suffix}")
     output_path.write_text(json.dumps(results, indent=2))
     print(f"Saved results for '{model_method}' to {output_path.resolve()}")
 

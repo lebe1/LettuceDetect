@@ -17,7 +17,7 @@
         "auroc": 0.5715432724814064,
         "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.8054    0.8147    0.8100       696\nHallucinated     0.3418    0.3284    0.3350       204\n\n    accuracy                         0.7044       900\n   macro avg     0.5736    0.5715    0.5725       900\nweighted avg     0.7003    0.7044    0.7023       900\n"
       },
-      "runtime_seconds": 5.248250722885132
+      "runtime_seconds": 5.452212333679199
     },
     "Data2txt": {
       "metrics": {
@@ -34,7 +34,7 @@
         "auroc": 0.5268994237567188,
         "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.4938    0.1246    0.1990       321\nHallucinated     0.6569    0.9292    0.7697       579\n\n    accuracy                         0.6422       900\n   macro avg     0.5754    0.5269    0.4843       900\nweighted avg     0.5987    0.6422    0.5661       900\n"
       },
-      "runtime_seconds": 4.347532749176025
+      "runtime_seconds": 3.861656904220581
     },
     "QA": {
       "metrics": {
@@ -51,7 +51,7 @@
         "auroc": 0.6293918918918919,
         "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.8735    0.7838    0.8262       740\nHallucinated     0.3220    0.4750    0.3838       160\n\n    accuracy                         0.7289       900\n   macro avg     0.5978    0.6294    0.6050       900\nweighted avg     0.7755    0.7289    0.7476       900\n"
       },
-      "runtime_seconds": 3.180586338043213
+      "runtime_seconds": 2.753006935119629
     },
     "whole_dataset": {
       "metrics": {
@@ -68,8 +68,8 @@
         "auroc": 0.6988733446761357,
         "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.8192    0.6756    0.7405      1757\nHallucinated     0.5444    0.7222    0.6208       943\n\n    accuracy                         0.6919      2700\n   macro avg     0.6818    0.6989    0.6806      2700\nweighted avg     0.7232    0.6919    0.6987      2700\n"
       },
-      "runtime_seconds": 13.045557975769043
+      "runtime_seconds": 11.600451946258545
     }
   },
-  "total_runtime_seconds": 25.821927785873413
+  "total_runtime_seconds": 23.667328119277954
 }

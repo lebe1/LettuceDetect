@@ -1,0 +1,75 @@
+{
+  "model": "fuzzy",
+  "evaluation_type": "example_level",
+  "task_metrics": {
+    "Summary": {
+      "metrics": {
+        "supported": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "hallucinated": {
+          "precision": 0.22666666666666666,
+          "recall": 1.0,
+          "f1": 0.3695652173913043
+        },
+        "auroc": 0.5,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.0000    0.0000    0.0000       696\nHallucinated     0.2267    1.0000    0.3696       204\n\n    accuracy                         0.2267       900\n   macro avg     0.1133    0.5000    0.1848       900\nweighted avg     0.0514    0.2267    0.0838       900\n"
+      },
+      "runtime_seconds": 3.482377529144287
+    },
+    "Data2txt": {
+      "metrics": {
+        "supported": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "hallucinated": {
+          "precision": 0.6433333333333333,
+          "recall": 1.0,
+          "f1": 0.7829614604462475
+        },
+        "auroc": 0.5,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.0000    0.0000    0.0000       321\nHallucinated     0.6433    1.0000    0.7830       579\n\n    accuracy                         0.6433       900\n   macro avg     0.3217    0.5000    0.3915       900\nweighted avg     0.4139    0.6433    0.5037       900\n"
+      },
+      "runtime_seconds": 4.4913249015808105
+    },
+    "QA": {
+      "metrics": {
+        "supported": {
+          "precision": 0.9629629629629629,
+          "recall": 0.03513513513513514,
+          "f1": 0.06779661016949153
+        },
+        "hallucinated": {
+          "precision": 0.18213058419243985,
+          "recall": 0.99375,
+          "f1": 0.30784123910939015
+        },
+        "auroc": 0.5144425675675676,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.9630    0.0351    0.0678       740\nHallucinated     0.1821    0.9938    0.3078       160\n\n    accuracy                         0.2056       900\n   macro avg     0.5725    0.5144    0.1878       900\nweighted avg     0.8241    0.2056    0.1105       900\n"
+      },
+      "runtime_seconds": 2.127333164215088
+    },
+    "whole_dataset": {
+      "metrics": {
+        "supported": {
+          "precision": 0.9629629629629629,
+          "recall": 0.014797951052931132,
+          "f1": 0.02914798206278027
+        },
+        "hallucinated": {
+          "precision": 0.35241301907968575,
+          "recall": 0.9989395546129375,
+          "f1": 0.5210176991150443
+        },
+        "auroc": 0.5068687528329343,
+        "classification_report": "              precision    recall  f1-score   support\n\n   Supported     0.9630    0.0148    0.0291      1757\nHallucinated     0.3524    0.9989    0.5210       943\n\n    accuracy                         0.3585      2700\n   macro avg     0.6577    0.5069    0.2751      2700\nweighted avg     0.7497    0.3585    0.2009      2700\n"
+      },
+      "runtime_seconds": 14.554442405700684
+    }
+  },
+  "total_runtime_seconds": 24.65547800064087
+}
