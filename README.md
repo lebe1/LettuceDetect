@@ -190,6 +190,17 @@ python scripts/evaluate.py \
     --evaluation_type example_level
 ```
 
+### Experiments
+
+You can run the experiments for the model evaluation on each level and define your models inside `run_rule_based_experiments`:
+
+```bash
+python scripts/run_rule_based_experiments.py \
+    --data_path data/ragtruth/ragtruth_data.json \
+    --evaluation_type example_level \
+    --output_path results/rule_based_detection.json
+```
+
 ### Model Output Format
 
 The model can output predictions in two formats:

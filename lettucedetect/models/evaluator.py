@@ -8,6 +8,7 @@ from sklearn.metrics import (
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+import nltk
 
 from lettucedetect.datasets.hallucination_dataset import HallucinationSample
 from lettucedetect.models.inference import HallucinationDetector
@@ -381,6 +382,22 @@ def evaluate_detector_example_level(
         true_example_label = 1 if gold_spans else 0
         pred_example_label = 1 if predicted_spans else 0
 
+        if "Hillary Clinton surprised the world with the unconventional way she launched her campaign" in answer:
+            print("Original prompt", prompt)
+            print("\nOriginal answer", answer)
+            print("\nPredicted spans", predicted_spans)
+            print("\nGold spans", gold_spans)
+
+        if "The FBI has charged a Philadelphia woman, Keonna Thomas, with trying to travel overseas to fight for ISIS." in answer:
+            print("Original prompt", prompt)
+            print("Predicted spans", predicted_spans)
+            print("Gold spans", gold_spans)
+
+        if "Blue Bell ice cream has temporarily shut down one of its manufacturing plants after discovering listeria contamination in" in answer:
+            print("Original prompt", prompt) 
+            print("Predicted spans", predicted_spans)
+            print("Gold spans", gold_spans)
+
         example_labels.append(true_example_label)
         example_preds.append(pred_example_label)
 
@@ -418,5 +435,76 @@ def evaluate_detector_example_level(
         print("\nDetailed Example-Level Classification Report:")
         print(report)
         results["classification_report"] = report
+
+    return results
+
+def evaluate_detector_token_level(
+    detector: HallucinationDetector,
+    samples: list[HallucinationSample],
+    verbose: bool = True,
+) -> dict[str, float]:
+    """Evaluate the HallucinationDetector at the token level.
+
+    This function compares the predicted and gold spans based on token overlaps.
+    It assumes that each sample includes:
+      - "prompt": the prompt text.
+      - "answer": the answer text.
+      - "gold_spans": list of dicts with "start" and "end" (character indices of gold spans).
+
+    The answer is tokenized and tokens that fall within gold or predicted spans are marked.
+    Global precision, recall, and F1 are computed based on the number of overlapping tokens.
+
+    :param detector: The hallucination detector.
+    :param samples: A list of hallucination samples to evaluate.
+    :param verbose: Whether to print a detailed classification report.
+    :return: A dictionary with token-level metrics: {"token_precision": ..., "token_recall": ..., "token_f1": ...}
+    """
+    nltk.download('punkt', quiet=True)
+
+    total_gold_tokens = 0
+    total_predicted_tokens = 0
+    total_overlap_tokens = 0
+
+    for sample in tqdm(samples, desc="Evaluating (token-level)", leave=False):
+        prompt = sample.prompt
+        answer = sample.answer
+        gold_spans = sample.labels
+        predicted_spans = detector.predict_prompt(prompt, answer, output_format="spans")
+
+        # Tokenize the answer and get character offsets
+        tokens = nltk.word_tokenize(answer)
+        spans = list(nltk.tokenize.WhitespaceTokenizer().span_tokenize(answer))
+        print(f"SPANS {spans}")
+
+        token_is_gold = [False] * len(tokens)
+        token_is_pred = [False] * len(tokens)
+
+        for i, (start, end) in enumerate(spans):
+            for gold in gold_spans:
+                if start < gold["end"] and end > gold["start"]:
+                    token_is_gold[i] = True
+            for pred in predicted_spans:
+                if start < pred["end"] and end > pred["start"]:
+                    token_is_pred[i] = True
+
+        total_gold_tokens += sum(token_is_gold)
+        total_predicted_tokens += sum(token_is_pred)
+        total_overlap_tokens += sum(g and p for g, p in zip(token_is_gold, token_is_pred))
+
+    precision = total_overlap_tokens / total_predicted_tokens if total_predicted_tokens > 0 else 0
+    recall = total_overlap_tokens / total_gold_tokens if total_gold_tokens > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+    results = {
+        "token_precision": precision,
+        "token_recall": recall,
+        "token_f1": f1,
+    }
+
+    if verbose:
+        print("\nToken-Level Evaluation:")
+        print(f"Precision: {precision:.4f}")
+        print(f"Recall:    {recall:.4f}")
+        print(f"F1 Score:  {f1:.4f}")
 
     return results

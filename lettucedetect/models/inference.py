@@ -12,9 +12,9 @@ from lettucedetect.detectors.factory import make_detector
 class HallucinationDetector:
     """Facade class that delegates to a concrete detector chosen by *method*.
 
-    :param method: ``"transformer"`` (token-classifier) or ``"llm"`` (OpenAI function-calling).
-    :param kwargs: Passed straight through to the chosen detector’s constructor.
-    """
+        :param method: "transformer" for the model-based approach, "rule" for the rule-based approach, "llm" for the LLM-based approach
+        :param kwargs: Additional keyword arguments passed to the underlying detector.
+        """
 
     def __init__(self, method: str = "transformer", **kwargs):
         self.detector = make_detector(method, **kwargs)
