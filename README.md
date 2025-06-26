@@ -295,6 +295,13 @@ print(response.predictions)
 See `demo/detection_api.ipynb` for more examples.
 For async support use the `LettuceClientAsync` class instead.
 
+## FastAPI app
+
+To start the FastAPI app, simply run the following command in the script folder
+```bash
+uvicorn main:app --reload
+```
+
 ## License
 
 MIT License - see LICENSE file for details.
