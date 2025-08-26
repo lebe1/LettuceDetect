@@ -204,8 +204,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
         # Use PromptUtils to format the context and question
         full_prompt = PromptUtils.format_context(context, question, self.lang)
         return self._predict(full_prompt, answer)
@@ -218,8 +220,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
         return self._predict(prompt, answer)
 
     def predict_prompt_batch(
@@ -232,8 +236,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
 
         with ThreadPoolExecutor(max_workers=30) as pool:
             futs = [pool.submit(self._predict, p, a) for p, a in zip(prompts, answers)]
