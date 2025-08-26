@@ -20,12 +20,14 @@ class RAGFactChecker:
         openai_api_key: Optional[str] = None,
         model: str = "gpt-4o",
         base_url: Optional[str] = None,
+        temperature: float = 0.0,
     ):
         """Initialize RAGFactChecker.
 
         :param openai_api_key: OpenAI API key. If None, uses OPENAI_API_KEY env var.
         :param model: OpenAI model to use (default: "gpt-4o"). Options: "gpt-4o", "gpt-4", "gpt-3.5-turbo", etc.
         :param base_url: Optional base URL for API (e.g., "http://localhost:1234/v1" for local servers).
+        :param temperature: Temperature for model sampling (default: 0.0 for deterministic outputs).
 
         :return: RAGFactChecker instance
         """
@@ -37,6 +39,7 @@ class RAGFactChecker:
 
         self.model = model
         self.base_url = base_url
+        self.temperature = temperature
         self.logger = logging.getLogger(__name__)
         self._setup_components()
 
@@ -55,6 +58,7 @@ class RAGFactChecker:
             self.config = Config()
             self.config.model.llm.api_key = self.openai_api_key
             self.config.model.llm.generator_model = self.model
+            self.config.model.llm.temperature = self.temperature
             if self.base_url:
                 self.config.model.llm.base_url = self.base_url
 
@@ -216,6 +220,102 @@ class RAGFactChecker:
         }
 
     # ============ BATCH OPERATIONS ============
+
+    async def generate_hallucination_from_answer_batch_async(
+        self,
+        correct_answers: List[str],
+        questions: List[str],
+        error_types: Optional[List[List[str]]] = None,
+        intensities: Optional[List[float]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Generate hallucinated version of multiple correct answers."""
+        error_type_enums_list = None
+        if error_types:
+            from rag_fact_checker.model.hallucination_data_generator.answer_based_hallucination_data_generator import (
+                ErrorType,
+            )
+
+            error_type_enums_list = []
+            for error_type in error_types:
+                error_type_enums = []
+                for error_type in error_type:
+                    if hasattr(ErrorType, error_type.upper()):
+                        error_type_enums.append(getattr(ErrorType, error_type.upper()))
+                error_type_enums_list.append(error_type_enums)
+
+        result = await self.answer_generator.generate_answer_based_hallucination_batch_async(
+            correct_answers=correct_answers,
+            questions=questions,
+            error_types_list=error_type_enums_list,
+            intensities=intensities,
+        )
+        return result
+
+    async def generate_hallucination_from_context_batch_async(
+        self,
+        contexts: List[List[str]],
+        questions: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Generate hallucinated version of multiple correct answers."""
+        result = await self.reference_generator.generate_hlcntn_data_batch_async(
+            contexts, questions
+        )
+        return result
+
+    def generate_hallucination_from_answer_batch(
+        self,
+        correct_answers: List[str],
+        questions: List[str],
+        error_types: Optional[List[List[str]]] = None,
+        intensities: Optional[List[float]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Generate hallucinated version of multiple correct answers.
+
+        :param correct_answers: List of correct answers to modify
+        :param questions: List of original questions for context
+        :param error_types: List of lists of types of errors to inject (factual, temporal, numerical, etc.)
+        :param intensities: List of error intensities 0.1-1.0
+
+        :return: List of generated hallucinated versions with error details
+
+        """
+        error_type_enums_list = None
+        if error_types:
+            from rag_fact_checker.model.hallucination_data_generator.answer_based_hallucination_data_generator import (
+                ErrorType,
+            )
+
+            error_type_enums_list = []
+            for error_type in error_types:
+                error_type_enums = []
+                for error_type in error_type:
+                    if hasattr(ErrorType, error_type.upper()):
+                        error_type_enums.append(getattr(ErrorType, error_type.upper()))
+                error_type_enums_list.append(error_type_enums)
+
+        result = self.answer_generator.generate_answer_based_hallucination_batch(
+            correct_answers=correct_answers,
+            questions=questions,
+            error_types_list=error_type_enums_list,
+            intensities=intensities,
+        )
+        return result
+
+    def generate_hallucination_from_context_batch(
+        self,
+        contexts: List[List[str]],
+        questions: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Generate hallucinated version of multiple correct answers.
+
+        :param contexts: List of context document lists
+        :param questions: List of original questions for context
+
+        :return: List of generated hallucinated versions with error details
+
+        """
+        result = self.reference_generator.generate_hlcntn_data_batch(contexts, questions)
+        return result
 
     def generate_triplets_batch(self, texts: List[str]) -> List[List[List[str]]]:
         """Generate triplets for multiple texts.

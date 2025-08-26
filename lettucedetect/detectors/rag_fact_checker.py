@@ -13,20 +13,28 @@ class RAGFactCheckerDetector(BaseDetector):
     """
 
     def __init__(
-        self, openai_api_key: str = None, model: str = "gpt-4o", base_url: str = None, **kwargs
+        self,
+        openai_api_key: str = None,
+        model: str = "gpt-4o",
+        base_url: str = None,
+        temperature: float = 0.0,
+        **kwargs,
     ):
         """Initialize the RAGFactChecker detector.
 
         :param openai_api_key: OpenAI API key
         :param model: OpenAI model to use (default: "gpt-4o")
         :param base_url: Optional base URL for API (e.g., "http://localhost:1234/v1" for local servers)
+        :param temperature: Temperature for model sampling (default: 0.0 for deterministic outputs)
         :param kwargs: Additional arguments (ignored for simplicity)
         :return: RAGFactChecker instance
         """
         from lettucedetect.ragfactchecker import RAGFactChecker
 
         # Use our simple, clean wrapper internally
-        self.rag = RAGFactChecker(openai_api_key=openai_api_key, model=model, base_url=base_url)
+        self.rag = RAGFactChecker(
+            openai_api_key=openai_api_key, model=model, base_url=base_url, temperature=temperature
+        )
 
     def predict(
         self,

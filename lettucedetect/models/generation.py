@@ -17,6 +17,7 @@ class HallucinationGenerator:
         openai_api_key: str = None,
         model: str = "gpt-4o",
         base_url: str = None,
+        temperature: float = 0.0,
         **kwargs,
     ):
         """Initialize hallucination generator.
@@ -25,10 +26,13 @@ class HallucinationGenerator:
         :param openai_api_key: OpenAI API key
         :param model: OpenAI model to use (default: "gpt-4o")
         :param base_url: Optional base URL for API (e.g., "http://localhost:1234/v1" for local servers)
+        :param temperature: Temperature for model sampling (default: 0.0 for deterministic outputs)
         :param kwargs: Additional arguments (ignored)
 
         """
-        self.rag = RAGFactChecker(openai_api_key=openai_api_key, model=model, base_url=base_url)
+        self.rag = RAGFactChecker(
+            openai_api_key=openai_api_key, model=model, base_url=base_url, temperature=temperature
+        )
 
     def generate(
         self, context: List[str], question: str, answer: str = None, **kwargs
@@ -63,9 +67,27 @@ class HallucinationGenerator:
         :return: List of generation results
 
         """
-        results = []
-        for i, (context, question) in enumerate(zip(contexts, questions)):
-            answer = answers[i] if answers and i < len(answers) else None
-            result = self.generate(context, question, answer, **kwargs)
-            results.append(result)
-        return results
+        if answers:
+            return self.rag.generate_hallucination_from_answer_batch(answers, questions)
+        else:
+            return self.rag.generate_hallucination_from_context_batch(contexts, questions)
+
+    async def generate_batch_async(
+        self, contexts: List[List[str]], questions: List[str], answers: List[str] = None, **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Generate hallucinated content for multiple inputs.
+
+        :param contexts: List of context lists
+        :param questions: List of questions
+        :param answers: List of answers (optional)
+        :param kwargs: Additional parameters
+
+        :return: List of generation results
+
+        """
+        if answers:
+            return await self.rag.generate_hallucination_from_answer_batch_async(answers, questions)
+        else:
+            return await self.rag.generate_hallucination_from_context_batch_async(
+                contexts, questions
+            )
