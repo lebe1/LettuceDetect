@@ -1,6 +1,6 @@
 """Simple hallucination generation using RAGFactChecker."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from lettucedetect.ragfactchecker import RAGFactChecker
 
@@ -35,7 +35,12 @@ class HallucinationGenerator:
         )
 
     def generate(
-        self, context: List[str], question: str, answer: str = None, **kwargs
+        self,
+        context: List[str],
+        question: str,
+        answer: str = None,
+        error_types: Optional[List[str]] = None,
+        intensity: float = 0.3,
     ) -> Dict[str, Any]:
         """Generate hallucinated content.
 
@@ -49,13 +54,22 @@ class HallucinationGenerator:
         """
         if answer:
             # Answer-based generation
-            return self.rag.generate_hallucination_from_answer(answer, question)
+            return self.rag.generate_hallucination_from_answer(
+                answer, question, error_types, intensity
+            )
         else:
             # Context-based generation
-            return self.rag.generate_hallucination_from_context(context, question)
+            return self.rag.generate_hallucination_from_context(
+                context, question, error_types, intensity
+            )
 
     def generate_batch(
-        self, contexts: List[List[str]], questions: List[str], answers: List[str] = None, **kwargs
+        self,
+        contexts: List[List[str]],
+        questions: List[str],
+        answers: List[str] = None,
+        error_types: Optional[List[str]] = None,
+        intensity: float = 0.3,
     ) -> List[Dict[str, Any]]:
         """Generate hallucinated content for multiple inputs.
 
@@ -65,15 +79,28 @@ class HallucinationGenerator:
         :param kwargs: Additional parameters
 
         :return: List of generation results
-
         """
+        if error_types:
+            error_types = [error_types] * len(contexts)
+        if intensity:
+            intensity = [intensity] * len(contexts)
+
         if answers:
-            return self.rag.generate_hallucination_from_answer_batch(answers, questions)
+            return self.rag.generate_hallucination_from_answer_batch(
+                answers, questions, error_types, intensity
+            )
         else:
-            return self.rag.generate_hallucination_from_context_batch(contexts, questions)
+            return self.rag.generate_hallucination_from_context_batch(
+                contexts, questions, error_types, intensity
+            )
 
     async def generate_batch_async(
-        self, contexts: List[List[str]], questions: List[str], answers: List[str] = None, **kwargs
+        self,
+        contexts: List[List[str]],
+        questions: List[str],
+        answers: List[str] = None,
+        error_types: Optional[List[str]] = None,
+        intensity: float = 0.3,
     ) -> List[Dict[str, Any]]:
         """Generate hallucinated content for multiple inputs.
 
@@ -85,9 +112,16 @@ class HallucinationGenerator:
         :return: List of generation results
 
         """
+        if error_types:
+            error_types = [error_types] * len(contexts)
+        if intensity:
+            intensity = [intensity] * len(contexts)
+
         if answers:
-            return await self.rag.generate_hallucination_from_answer_batch_async(answers, questions)
+            return await self.rag.generate_hallucination_from_answer_batch_async(
+                answers, questions, error_types, intensity
+            )
         else:
             return await self.rag.generate_hallucination_from_context_batch_async(
-                contexts, questions
+                contexts, questions, error_types, intensity
             )
