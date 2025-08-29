@@ -22,8 +22,18 @@ Example usage:
     print(f"Issues: {result['has_issues']}")
 """
 
-from .callbacks import LettuceDetectCallback, LettuceStreamingCallback, detect_in_chain, stream_with_detection
+from .callbacks import (
+    LettuceDetectCallback,
+    LettuceStreamingCallback,
+    detect_in_chain,
+    stream_with_detection,
+)
 
-__all__ = ["LettuceDetectCallback", "LettuceStreamingCallback", "detect_in_chain", "stream_with_detection"]
+__all__ = [
+    "LettuceDetectCallback",
+    "LettuceStreamingCallback",
+    "detect_in_chain",
+    "stream_with_detection",
+]
 
 __version__ = "1.0.0"

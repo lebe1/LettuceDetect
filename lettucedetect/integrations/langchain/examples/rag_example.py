@@ -11,9 +11,7 @@ Requirements:
 
 import os
 
-from langchain.callbacks.base import BaseCallbackHandler
 from langchain.chains import RetrievalQA
-from langchain.schema import HumanMessage
 
 # LangChain imports
 from langchain.text_splitter import CharacterTextSplitter
@@ -23,7 +21,6 @@ from langchain_openai import ChatOpenAI, OpenAI, OpenAIEmbeddings
 # LettuceDetect integration
 from lettucedetect.integrations.langchain.callbacks import (
     LettuceDetectCallback,
-    LettuceStreamingCallback,
     detect_in_chain,
     stream_with_detection,
 )
@@ -104,23 +101,21 @@ def example_rag_streaming_detection():
     text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=0)
     docs = text_splitter.create_documents(SAMPLE_DOCUMENTS)
     vectorstore = Chroma.from_documents(docs, embeddings)
-    
+
     llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
     chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
+        llm=llm, chain_type="stuff", retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
     )
 
     question = "How does Python relate to ocean exploration and marine biology?"
     context = [doc.page_content for doc in vectorstore.similarity_search(question, k=2)]
-    
+
     print(f"Q: {question}")
     print(f"Context: {context[0][:50]}...")
     print()
     print("Streaming Events:")
     print("-" * 18)
-    
+
     # Use the working streaming approach
     event_count = 0
     for event in stream_with_detection(chain, {"query": question}, context, check_every=8):
@@ -128,8 +123,12 @@ def example_rag_streaming_detection():
         if event["type"] == "token":
             print(event["content"], end="", flush=True)
         elif event["type"] == "detection" and event["has_issues"]:
-            print(f"\n[Detection {event_count}: {event['issue_count']} issues, confidence: {event['confidence']:.3f}]", end="", flush=True)
-    
+            print(
+                f"\n[Detection {event_count}: {event['issue_count']} issues, confidence: {event['confidence']:.3f}]",
+                end="",
+                flush=True,
+            )
+
     print("\n")
     print(f"Total events processed: {event_count}")
 
@@ -140,41 +139,40 @@ def example_simple_json_streaming():
     print("-" * 35)
     print("Shows real-time JSON events - exactly what API developers need!")
     print()
-    
+
     # Setup simple RAG chain
     embeddings = OpenAIEmbeddings()
     text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=0)
     docs = text_splitter.create_documents(SAMPLE_DOCUMENTS)
     vectorstore = Chroma.from_documents(docs, embeddings)
-    
+
     llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
     chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
+        llm=llm, chain_type="stuff", retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
     )
-    
+
     question = "How does Python relate to ocean exploration?"
     context = [doc.page_content for doc in vectorstore.similarity_search(question, k=2)]
-    
+
     print(f"Q: {question}")
     print(f"Context: {context[0][:50]}...")
     print()
     print("JSON Events Stream:")
     print("-" * 18)
-    
+
     # THIS IS THE MAGIC - Stream JSON events in real-time!
     for event in stream_with_detection(chain, {"query": question}, context, check_every=5):
         # Each event is a JSON-serializable dict
         import json
+
         print(json.dumps(event))
-        
+
         # In your API:
         # if event["type"] == "token":
         #     await websocket.send_json(event)
         # elif event["type"] == "detection" and event["has_issues"]:
         #     await websocket.send_json({"alert": "hallucination_detected", "spans": event["spans"]})
-    
+
     print()
     print("Perfect for:")
     print("  - FastAPI streaming responses")
