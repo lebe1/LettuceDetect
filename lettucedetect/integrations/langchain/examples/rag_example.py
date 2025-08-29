@@ -25,6 +25,7 @@ from lettucedetect.integrations.langchain.callbacks import (
     LettuceDetectCallback,
     LettuceStreamingCallback,
     detect_in_chain,
+    stream_with_detection,
 )
 
 # Sample documents for demonstration
@@ -59,8 +60,8 @@ def create_rag_chain():
     return chain
 
 
-def example_basic_usage():
-    """Basic usage with automatic detection."""
+def example_basic_rag_detection():
+    """Basic RAG with post-generation hallucination detection."""
     print("Basic RAG + Detection Example")
     print("-" * 40)
 
@@ -76,109 +77,110 @@ def example_basic_usage():
     for question in questions:
         print(f"Q: {question}")
 
-        # Use convenience function
+        # Use convenience function for simple post-generation detection
         result = detect_in_chain(chain, question, verbose=True)
 
         print(f"A: {result['answer']}")
 
         if result["has_issues"]:
             detection = result["detection"]
-            print(f"ALERT: {detection['issue_count']} issues detected")
-            print(f"Confidence: {detection['confidence']:.3f}")
+            print(f"🚨 Issues detected: {detection['issue_count']} spans")
+            print(f"Max confidence: {detection['confidence']:.3f}")
         else:
-            print("Status: Clean response")
+            print("✅ No issues detected")
 
         print()
 
 
-def example_streaming_detection():
-    """Real streaming example with token-by-token detection - using proven Streamlit pattern."""
-    print("Real-time Streaming Detection Example")
+def example_rag_streaming_detection():
+    """RAG with real-time streaming detection - simplified to show working approach."""
+    print("RAG + Real-time Streaming Detection Example")
     print("-" * 40)
-    print("Watch tokens appear one-by-one with real-time detection...")
+    print("Shows structured JSON events during streaming")
     print()
 
-    # Manual retrieval setup
+    # Setup RAG chain
     embeddings = OpenAIEmbeddings()
     text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=0)
     docs = text_splitter.create_documents(SAMPLE_DOCUMENTS)
     vectorstore = Chroma.from_documents(docs, embeddings)
-
-    # Create streaming LLM - same as Streamlit demo
+    
     llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
-
-    question = "How does Python relate to ocean exploration and marine biology?"
-    print(f"Q: {question}")
-
-    # Retrieve relevant context
-    retrieved_docs = vectorstore.similarity_search(question, k=2)
-    context = [doc.page_content for doc in retrieved_docs]
-
-    # Create prompt message
-    context_str = "\n".join(context)
-    prompt_text = f"""Based on the following context, answer the question:
-
-Context: {context_str}
-
-Question: {question}
-
-Answer based only on the provided context:"""
-
-    # Track detection results and tokens
-    detection_events = []
-    tokens_received = []
-
-    class ConsoleStreamingHandler(BaseCallbackHandler):
-        """Print tokens to console as they arrive."""
-
-        def on_llm_start(self, *args, **kwargs):
-            print("A: ", end="", flush=True)
-
-        def on_chat_model_start(self, *args, **kwargs):
-            print("A: ", end="", flush=True)
-
-        def on_llm_new_token(self, token: str, **kwargs):
-            tokens_received.append(token)
-            print(token, end="", flush=True)
-
-    def handle_realtime_detection(result):
-        """Handle real-time detection results."""
-        if result.get("is_final", False):
-            print(f"\n🎯 Final: {result['issue_count']} total issues detected")
-        elif result.get("has_issues", False):
-            detection_events.append(result)
-            print(f"\n🔍 Alert: {result['issue_count']} issues at {result['token_count']} tokens")
-            print(
-                "A: " + "".join(tokens_received), end="", flush=True
-            )  # Continue from where we left off
-
-    # Create callbacks - same pattern as Streamlit demo
-    streaming_callback = LettuceStreamingCallback(
-        method="transformer"
-        if os.path.exists("output/hallucination_detection_ettin_17m")
-        else "rag_fact_checker",
-        model_path="output/hallucination_detection_ettin_17m"
-        if os.path.exists("output/hallucination_detection_ettin_17m")
-        else None,
-        context=context,
-        question=question,
-        check_every=8,  # Check every 8 tokens
-        on_detection=handle_realtime_detection,
-        verbose=False,
+    chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
     )
 
-    console_handler = ConsoleStreamingHandler()
-    callbacks = [streaming_callback, console_handler]
+    question = "How does Python relate to ocean exploration and marine biology?"
+    context = [doc.page_content for doc in vectorstore.similarity_search(question, k=2)]
+    
+    print(f"Q: {question}")
+    print(f"Context: {context[0][:50]}...")
+    print()
+    print("Streaming Events:")
+    print("-" * 18)
+    
+    # Use the working streaming approach
+    event_count = 0
+    for event in stream_with_detection(chain, {"query": question}, context, check_every=8):
+        event_count += 1
+        if event["type"] == "token":
+            print(event["content"], end="", flush=True)
+        elif event["type"] == "detection" and event["has_issues"]:
+            print(f"\n[Detection {event_count}: {event['issue_count']} issues, confidence: {event['confidence']:.3f}]", end="", flush=True)
+    
+    print("\n")
+    print(f"Total events processed: {event_count}")
 
-    # Use the exact same pattern as Streamlit demo
-    try:
-        messages = [HumanMessage(content=prompt_text)]
-        llm.invoke(messages, config={"callbacks": callbacks})
 
-        print(f"\n\nSummary: {len(detection_events)} detection events during streaming")
-
-    except Exception as e:
-        print(f"Error: {e}")
+def example_simple_json_streaming():
+    """Simple example showing TRUE JSON streaming - perfect for API developers."""
+    print("Simple JSON Streaming Example")
+    print("-" * 35)
+    print("Shows real-time JSON events - exactly what API developers need!")
+    print()
+    
+    # Setup simple RAG chain
+    embeddings = OpenAIEmbeddings()
+    text_splitter = CharacterTextSplitter(chunk_size=200, chunk_overlap=0)
+    docs = text_splitter.create_documents(SAMPLE_DOCUMENTS)
+    vectorstore = Chroma.from_documents(docs, embeddings)
+    
+    llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
+    chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=vectorstore.as_retriever(search_kwargs={"k": 2})
+    )
+    
+    question = "How does Python relate to ocean exploration?"
+    context = [doc.page_content for doc in vectorstore.similarity_search(question, k=2)]
+    
+    print(f"Q: {question}")
+    print(f"Context: {context[0][:50]}...")
+    print()
+    print("JSON Events Stream:")
+    print("-" * 18)
+    
+    # THIS IS THE MAGIC - Stream JSON events in real-time!
+    for event in stream_with_detection(chain, {"query": question}, context, check_every=5):
+        # Each event is a JSON-serializable dict
+        import json
+        print(json.dumps(event))
+        
+        # In your API:
+        # if event["type"] == "token":
+        #     await websocket.send_json(event)
+        # elif event["type"] == "detection" and event["has_issues"]:
+        #     await websocket.send_json({"alert": "hallucination_detected", "spans": event["spans"]})
+    
+    print()
+    print("Perfect for:")
+    print("  - FastAPI streaming responses")
+    print("  - WebSocket real-time chat")
+    print("  - Server-sent events (SSE)")
+    print("  - Any API that needs live updates")
 
 
 def example_with_manual_context():
@@ -217,9 +219,11 @@ def main():
         return
 
     try:
-        example_basic_usage()
+        example_basic_rag_detection()
         print("=" * 60)
-        example_streaming_detection()  # Real streaming with token-by-token detection!
+        example_simple_json_streaming()  # TRUE JSON streaming!
+        print("=" * 60)
+        example_rag_streaming_detection()  # Detailed streaming analysis
         print("=" * 60)
         example_with_manual_context()
 

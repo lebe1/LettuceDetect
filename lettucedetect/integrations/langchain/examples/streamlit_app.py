@@ -16,8 +16,6 @@ import streamlit.components.v1 as components
 
 # LangChain imports with compatibility handling
 try:
-    from langchain_core.caches import BaseCache
-    from langchain_core.callbacks import Callbacks
     from langchain_openai import ChatOpenAI
 
     try:

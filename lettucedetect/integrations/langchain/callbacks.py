@@ -1,6 +1,8 @@
 """Clean, minimal LangChain callbacks for LettuceDetect integration."""
 
 from typing import Any, Callable, Dict, List, Optional
+import threading
+from queue import Queue
 
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.schema import LLMResult
@@ -124,16 +126,16 @@ class LettuceDetectCallback(BaseCallbackHandler):
 
 
 class LettuceStreamingCallback(BaseCallbackHandler):
-    """Real-time hallucination detection during streaming generation.
+    """Real-time hallucination detection with JSON event streaming.
 
-    Runs detection periodically during token streaming, enabling real-time
-    feedback about potential hallucinations as they're being generated.
+    Provides true streaming of both tokens and detection results through
+    a queue-based system that works with any LangChain component.
     """
 
     def __init__(
         self,
         method: str = "transformer",
-        model_path: Optional[str] = None,
+        model_path: Optional[str] = "output/hallucination_detection_ettin_17m",
         context: Optional[List[str]] = None,
         question: Optional[str] = None,
         check_every: int = 10,
@@ -163,8 +165,9 @@ class LettuceStreamingCallback(BaseCallbackHandler):
         # Streaming state
         self.accumulated_text = ""
         self.token_count = 0
-        self.last_checked_length = 0
-        self.detection_results = []
+        
+        # Queue for true streaming of JSON events
+        self.event_queue = Queue()
 
     def set_context(self, context: List[str]) -> None:
         """Set context documents."""
@@ -178,8 +181,6 @@ class LettuceStreamingCallback(BaseCallbackHandler):
         """Reset state when streaming starts."""
         self.accumulated_text = ""
         self.token_count = 0
-        self.last_checked_length = 0
-        self.detection_results = []
 
     def on_chat_model_start(self, *args, **kwargs):
         """Handle chat model start for newer LangChain versions."""
@@ -189,6 +190,13 @@ class LettuceStreamingCallback(BaseCallbackHandler):
         """Process new token and run detection periodically."""
         self.accumulated_text += token
         self.token_count += 1
+        
+        # Stream token event immediately
+        self.event_queue.put({
+            "type": "token",
+            "content": token,
+            "position": len(self.accumulated_text)
+        })
 
         # Run detection every N tokens
         if (
@@ -213,12 +221,19 @@ class LettuceStreamingCallback(BaseCallbackHandler):
                     "confidence": max([s.get("confidence", 0) for s in spans], default=0),
                     "issue_count": len(spans),
                     "token_count": len(self.accumulated_text.split()),
-                    "new_text": self.accumulated_text[self.last_checked_length :],
                     "is_incremental": True,
                 }
 
-                self.detection_results.append(result)
-                self.last_checked_length = len(self.accumulated_text)
+                # Stream detection event immediately
+                self.event_queue.put({
+                    "type": "detection",
+                    "has_issues": len(spans) > 0,
+                    "spans": spans,
+                    "confidence": max([s.get("confidence", 0) for s in spans], default=0),
+                    "issue_count": len(spans),
+                    "text_length": len(self.accumulated_text),
+                    "is_incremental": True
+                })
 
                 # Call user handler
                 if self.on_detection:
@@ -254,42 +269,55 @@ class LettuceStreamingCallback(BaseCallbackHandler):
                     "issue_count": len(spans),
                     "token_count": len(self.accumulated_text.split()),
                     "is_final": True,
-                    "total_checks": len(
-                        [r for r in self.detection_results if not r.get("is_final", False)]
-                    ),
                 }
-
-                self.detection_results.append(final_result)
+                
+                # Stream final detection event
+                self.event_queue.put({
+                    "type": "detection", 
+                    "has_issues": len(spans) > 0,
+                    "spans": spans,
+                    "confidence": max([s.get("confidence", 0) for s in spans], default=0),
+                    "issue_count": len(spans),
+                    "text_length": len(self.accumulated_text),
+                    "is_final": True
+                })
 
                 if self.on_detection:
                     self.on_detection(final_result)
 
                 if self.verbose:
                     status = "Issues found" if final_result["has_issues"] else "Clean"
-                    print(
-                        f"Final detection: {status} ({final_result['total_checks']} incremental checks)"
-                    )
+                    print(f"Final detection: {status}")
 
             except Exception as e:
                 if self.verbose:
                     print(f"Final detection error: {e}")
+        
+        # Signal completion
+        self.event_queue.put(None)  # End signal
 
     def on_chat_model_end(self, response, **kwargs):
         """Handle chat model end for newer LangChain versions."""
         self.on_llm_end(response, **kwargs)
 
-    def get_results(self) -> List[Dict[str, Any]]:
-        """Get all detection results."""
-        return self.detection_results.copy()
-
-    def get_final_result(self) -> Optional[Dict[str, Any]]:
-        """Get the final detection result."""
-        final_results = [r for r in self.detection_results if r.get("is_final", False)]
-        return final_results[-1] if final_results else None
-
-    def has_issues(self) -> bool:
-        """Check if any detection found issues."""
-        return any(r["has_issues"] for r in self.detection_results)
+    
+    def stream_events(self):
+        """Generator that yields JSON events as they arrive.
+        
+        Yields events with types:
+        - "token": Individual tokens as they arrive  
+        - "detection": Hallucination detection results
+        
+        This allows developers to:
+        - Stream JSON events to clients in real-time
+        - Handle tokens and detections immediately
+        - Build real-time UIs and APIs
+        """
+        while True:
+            event = self.event_queue.get()
+            if event is None:  # End signal
+                break
+            yield event
 
 
 def detect_in_chain(
@@ -324,3 +352,59 @@ def detect_in_chain(
         "detection": detection_result,
         "has_issues": detection_result["has_issues"] if detection_result else False,
     }
+
+
+def stream_with_detection(chain_or_llm, input_data, context, **callback_kwargs):
+    """Stream JSON events from any LangChain chain/LLM with hallucination detection.
+    
+    Works with RetrievalQA, ConversationChain, raw LLMs, or any LangChain component.
+    
+    Args:
+        chain_or_llm: Any LangChain chain or LLM
+        input_data: Input for the chain (query string, messages, etc.)
+        context: Context documents for hallucination detection
+        **callback_kwargs: Additional arguments for LettuceStreamingCallback
+    
+    Yields:
+        dict: JSON events with "type": "token" or "detection"
+    
+    Example:
+        # With RAG chain
+        chain = RetrievalQA.from_llm(llm, retriever)
+        for event in stream_with_detection(chain, "Your question", context):
+            if event["type"] == "token":
+                await websocket.send_json(event)
+            elif event["type"] == "detection":
+                print(f"Detection: {event['has_issues']}")
+    """
+    callback = LettuceStreamingCallback(context=context, **callback_kwargs)
+    
+    # Start chain/LLM in background thread
+    def run_generation():
+        try:
+            if hasattr(chain_or_llm, 'invoke'):
+                # Modern LangChain interface
+                chain_or_llm.invoke(input_data, config={"callbacks": [callback]})
+            elif hasattr(chain_or_llm, 'run'):
+                # Legacy chain interface
+                chain_or_llm.run(input_data, callbacks=[callback])
+            else:
+                # Try direct call
+                chain_or_llm(input_data, callbacks=[callback])
+        except Exception as e:
+            # Put error event and complete
+            callback.event_queue.put({
+                "type": "error",
+                "message": str(e)
+            })
+            callback.event_queue.put(None)
+    
+    thread = threading.Thread(target=run_generation)
+    thread.start()
+    
+    # Stream events as they arrive
+    try:
+        for event in callback.stream_events():
+            yield event
+    finally:
+        thread.join()  # Ensure thread completes
