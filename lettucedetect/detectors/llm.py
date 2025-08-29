@@ -23,14 +23,14 @@ HALLUCINATION_SCHEMA = {
                 "hallucination_list": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "List of exact text spans from the answer that are hallucinated"
+                    "description": "List of exact text spans from the answer that are hallucinated",
                 }
             },
             "required": ["hallucination_list"],
-            "additionalProperties": False
+            "additionalProperties": False,
         },
-        "strict": True
-    }
+        "strict": True,
+    },
 }
 
 
