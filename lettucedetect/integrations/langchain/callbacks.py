@@ -314,7 +314,8 @@ def detect_in_chain(
     callback.set_question(query)
 
     # Run chain with callback
-    result = chain.run(query, callbacks=[callback])
+    chain_result = chain.invoke({"query": query}, config={"callbacks": [callback]})
+    result = chain_result.get("result", "")
 
     detection_result = callback.get_last_result()
 
