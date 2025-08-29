@@ -47,6 +47,32 @@ for event in stream_with_detection(chain, {"query": question}, context, check_ev
         # Handle detection - log, alert, stop generation, etc.
 ```
 
+## Direct Callback Usage
+
+For more control, use `LettuceStreamingCallback` directly:
+
+```python
+from lettucedetect.integrations.langchain import LettuceStreamingCallback
+
+# Create callback with your settings
+callback = LettuceStreamingCallback(
+    context=context,
+    question=question,
+    check_every=10,
+    method="transformer"  # or "rag_fact_checker"
+)
+
+# Use with any LangChain chain
+result = chain.invoke({"query": question}, config={"callbacks": [callback]})
+
+# Stream events as they arrive
+for event in callback.stream_events():
+    if event["type"] == "token":
+        print(event["content"], end="")
+    elif event["type"] == "detection":
+        handle_detection(event)
+```
+
 ## What You Get
 
 **Token Events**: Real-time text as it's generated  
