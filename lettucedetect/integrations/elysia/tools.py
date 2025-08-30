@@ -64,16 +64,10 @@ async def detect_hallucinations(
             method="transformer", model_path="KRLabsOrg/lettucedect-base-modernbert-en-v1"
         )
 
-        print(f"Context: {context}")
-        print(f"Answer: {answer}")
-        print(f"Question: {question}")
-
         # Perform hallucination detection
         spans = detector.predict(
             context=context, answer=answer, question=question, output_format="spans"
         )
-
-        print(f"Spans: {spans}")
 
         # Calculate overall metrics
         has_issues = len(spans) > 0
