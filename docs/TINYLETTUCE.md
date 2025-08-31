@@ -1,4 +1,4 @@
-# TinyLettuce: Efficient Hallucination Detection with 17–68M Encoders
+# 🥬 TinyLettuce: Efficient Hallucination Detection with 17–68M Encoders
 
 <p align="center">
   <img src="https://github.com/KRLabsOrg/LettuceDetect/blob/dev/assets/tinytinylettuce.png?raw=true" alt="TinyLettuce Detective" width="400"/>
@@ -8,17 +8,16 @@
 
 ---
 
-We present **TinyLettuce**, our approach to efficient hallucination detection. By training tiny Ettin encoders (17-68M parameters) on synthetic data, we achieve better accuracy than billion-parameter LLM judges while running in real-time on CPU.
+We present **TinyLettuce**, our approach to efficient hallucination detection. By training tiny Ettin encoders (17-68M parameters), we achieve better accuracy than billion-parameter LLM judges while running in real-time on CPU.
 
 ## TL;DR
 
-- **TinyLettuce‑17M** (17M parameters) reaches **90.87% F1**, outperforming GPT‑5‑mini (83.69%), GPT‑OSS‑120B (83.38%), and Qwen3‑235B (79.84%)
-- Runs in **real-time on CPU** with <50ms latency and 1000+ req/s throughput
-- **Synthetic data generation** creates training data **100x cheaper** than manual annotation
+- We're releasing a pipeline for generating synthetic training data for hallucination detection and training tiny Ettin encoders on it.
+- **TinyLettuce‑17M** (17M parameters) reaches **90.87% F1** 🎯 on synthetic test data, outperforming GPT‑5‑mini (83.69%), GPT‑OSS‑120B (83.38%), and Qwen3‑235B (79.84%)
+- Runs in **real-time on CPU** with low latency and large throughput
+- **Synthetic data generation** creates training data **significantly cheaper** than manual annotation
 - Complete **end‑to‑end pipeline** for domain-specific model training - generate data and train in minutes
 - All models and code are **MIT licensed** and ready for production deployment
-
-Specialized training on synthetic data beats raw parameter count.
 
 ---
 
@@ -27,10 +26,9 @@ Specialized training on synthetic data beats raw parameter count.
 - **GitHub**: [github.com/KRLabsOrg/LettuceDetect](https://github.com/KRLabsOrg/LettuceDetect)  
 - **PyPI**: [pypi.org/project/lettucedetect](https://pypi.org/project/lettucedetect/)
 - **Hugging Face Models**:  
-  - [TinyLettuce Collection](https://huggingface.co/collections/KRLabsOrg/tinylettuce-models) (Coming Soon)
-- **Demo**: [Synthetic Data Generation Showcase](../demo/synthetic_data_generation_showcase.ipynb)
-- **Notebook**: [TinyLettuce end‑to‑end](../demo/tinylettuce.ipynb)
- - **Ettin Paper (LightOn)**: https://huggingface.co/papers/2507.11412
+  - [TinyLettuce Collection](https://huggingface.co/collections/KRLabsOrg/tinylettuce-68b42a66b8b6aaa4bf287bf4)
+- **Notebook/Demo**: [TinyLettuce end‑to‑end](https://github.com/KRLabsOrg/LettuceDetect/blob/main/demo/tinylettuce.ipynb)
+- **Ettin Paper (LightOn)**: https://huggingface.co/papers/2507.11412
 
 ---
 
@@ -43,6 +41,8 @@ pip install lettucedetect
 ```
 
 ### Detect Hallucinations (Real-time CPU)
+
+Take one of our pre-trained models and use it for detecting hallucinations in your data:
 
 ```python
 from lettucedetect.models.inference import HallucinationDetector
@@ -68,7 +68,7 @@ print(spans)
 
 ### Generate Synthetic Training Data
 
-Create training data automatically with controllable error types:
+With **lettucedetect**, you can create training data automatically with controllable error types using the HallucinationGenerator class. Generate domain-specific training data with just a few lines of code while controlling error types and intensity.
 
 ```python
 from lettucedetect import HallucinationGenerator
@@ -76,7 +76,6 @@ from lettucedetect import HallucinationGenerator
 # Initialize generator (GPT‑5 requires temperature=1.0)
 generator = HallucinationGenerator(model="gpt-5-mini", temperature=1.0)
 
-# Configure generation with error types and intensity
 # Generate numerical error
 result_medical = generator.generate(
     context=[
@@ -90,7 +89,6 @@ result_medical = generator.generate(
 print(f"Original: {result_medical['original_answer']}")
 print(f"Hallucinated: {result_medical['hallucinated_answer']}")
 
-# Configure generation with error types and intensity
 # Generate temporal error
 result_historical = generator.generate(
     context=[
@@ -105,13 +103,13 @@ print(f"Original: {result_historical['original_answer']}")
 print(f"Hallucinated: {result_historical['hallucinated_answer']}")
 ```
 
-**See the notebook for complete end‑to‑end examples**: `demo/tinylettuce.ipynb`
+**See the notebook for complete end‑to‑end examples**: [TinyLettuce notebook](https://github.com/KRLabsOrg/LettuceDetect/blob/main/demo/tinylettuce.ipynb)
 
 ---
 
 ## Motivation
 
-RAG systems need hallucination detection, but current solutions force painful trade-offs between accuracy, cost, and speed.
+RAG systems require hallucination detection, but current solutions have painful trade-offs between accuracy, cost, and speed.
 
 **Current hallucination detection approaches:**
 
@@ -128,42 +126,37 @@ RAG systems need hallucination detection, but current solutions force painful tr
    - Fast and efficient but historically limited by short context (512 tokens)
    - Can't handle typical RAG contexts which often exceed this limit
 
-**LettuceDetect's breakthrough**: We solved the context problem by leveraging ModernBERT's 8K token capacity, achieving better accuracy than fine-tuned LLMs at a fraction of the computational cost. This proved encoder-based detection could work at scale.
+**LettuceDetect's novel approach**: We solved the context problem by leveraging ModernBERT's 8K token capacity, achieving better accuracy than fine-tuned LLMs at a fraction of the computational cost. This shows that encoder-based detection could work at scale.
 
-**But we asked: can we go even smaller and faster?**
+**Can we go even smaller and faster?**
 
-**Enter TinyLettuce with Ettin encoders**: These lightweight transformers (17–68M parameters), introduced by LightOn, support 8K token contexts and are optimized for classification. Unlike large generative LLMs, Ettin focuses on efficient representation learning for fast, accurate detection.
+**Enter TinyLettuce with Ettin encoders**: Ettin encoders released by LightOn (see the [HF collection](https://huggingface.co/collections/jhu-clsp/encoders-vs-decoders-the-ettin-suite-686303e16142257eed8e6aeb) and [paper](https://huggingface.co/papers/2507.11412)) are small, long‑context encoders with modern architectures. These lightweight transformers (17–68M parameters) support long contexts and are optimized for classification and retrieval, focusing on efficient representation learning for fast, accurate detection.
 
-**The key insight**: With the right synthetic training data, a 17M parameter Ettin encoder can outperform 235B parameter giants at hallucination detection while running real-time on CPU. TinyLettuce democratizes hallucination detection by making it accessible, fast, and cost-effective for any deployment.
+**The key insight**: With the right synthetic training data, a 17M parameter Ettin encoder can outperform 235B parameter LLMs at hallucination detection while running real-time on CPU. TinyLettuce makes it easy to use small models for hallucination detection by making it accessible, fast, and cost-effective for any deployment.
 
 ## Approach
 
-We discovered something counterintuitive: **specialized training data matters more than parameter count**. With the right synthetic training data, a 17M parameter model can outperform 235B parameter giants at hallucination detection.
+**Specialized training data can matter more than parameter count**:
 
-Our approach challenges conventional wisdom through four steps:
-
-1. **Generate synthetic data** using RAGFactChecker - no manual annotation needed
+1. **Generate synthetic data** using LettuceDetect's HallucinationGenerator class - no manual annotation needed
 2. **Train tiny Ettin encoders** (17M-68M parameters) on this specialized data  
-3. **Deploy on CPU** for real-time inference at <50ms latency
-4. **Scale effortlessly** - no GPU clusters or API limits
-
----
+3. **Deploy on CPU** for real-time inference with low latency and high throughput
+4. **Scale effortlessly** - no GPU clusters or API limits (it's just a trained model)
 
 ## Synthetic Hallucination Data
 
-TinyLettuce leverages **synthetic training data** to achieve high performance. Instead of manually annotating thousands of examples, we use RAGFactChecker to generate training pairs automatically at scale.
+You can use LettuceDetect's HallucinationGenerator class to generate training pairs automatically at scale.
 
 ### Production-Scale Generation
 
 For large datasets, use our generation script:
 
 ```bash
-# Generate 2,000 training samples
+# Generate 2,000 training samples (1,000 hallucinated + 1,000 non-hallucinated)
 python scripts/generate_synthetic_data.py \
   --dataset rag-mini-bioasq \
   --num-samples 2000 \
-  --model gpt-5-mini \
-  --temperature 1.0 \
+  --model gpt-oss-120b \
   --output-format ragtruth \
   --output data/synthetic_2k.json
 ```
@@ -186,7 +179,7 @@ Minimal entry used for training:
 
 ## TinyLettuce Models (Ettin Encoders)
 
-Our **TinyLettuce** models prove that architecture and training data matter more than parameter count. Built on the **Ettin encoder** (LightOn) — a lightweight, efficient transformer optimized for classification — these models achieve strong accuracy with low latency.
+Built on the **Ettin encoder** (LightOn) — a lightweight, efficient transformer optimized for classification — these models achieve strong accuracy with low latency.
 
 ### Model Family
 
@@ -202,36 +195,37 @@ Why Ettin encoders work well:
 - Optimized for token classification, not generation
 - Efficient CPU inference without GPU overhead (smaller than ModernBERT models)
 
-The results speak for themselves.
-
 ### Data & Training Setup (Published Models)
 
-TinyLettuce models use two complementary training approaches:
+We show two training approaches for TinyLettuce models:
 
 **1. General-Purpose Models (RAGTruth + Synthetic):**
 - Base: Original RAGTruth dataset for broad hallucination detection capabilities
-- Augmentation: 1,500 synthetic hallucinated samples from `enelpol/rag-mini-bioasq` using 120B LLM baseline 
-- Training recipe: Ettin encoders fine-tuned on combined data for robust performance across domains
+- Synthetic augmentation: 3,000 total samples (1,500 hallucinated + 1,500 non-hallucinated) from `enelpol/rag-mini-bioasq` generated using GPT-OSS-120b
+- Training recipe: Ettin encoders fine-tuned on combined RAGTruth + synthetic data for robust performance across domains
 
 **2. Domain-Specific Models (Synthetic-Only):**
-- Pure synthetic data generation for targeted domain applications
+- Pure synthetic data generation for targeted domain applications  
 - Controllable error types and intensity for specific use cases
 - Faster training and deployment for specialized scenarios
+- Trained on 3,000 synthetic samples (1,500 hallucinated + 1,500 non-hallucinated)
 
 ### Training Hyperparameters (Released Models)
 
 - Optimizer: AdamW; learning rate `1e-5`; weight decay `0.01`.
-- Epochs: 3–6 (released checkpoints typically 3 for Ettin‑17M/32M, 3–6 for Ettin‑68M).
-- Batch size: 8; max sequence length: 4096 tokens.
+- Epochs: 5
+- Batch size: 16; max sequence length: 4096 tokens.
 - Tokenization: `AutoTokenizer`; label pad `-100`; `DataCollatorForTokenClassification`.
 
 ## Results
 
-When we trained TinyLettuce on synthetic data and tested it against billion-parameter models, the results shocked us.
+We trained several variants of Ettin encoders on synthetic data and tested them against larger scale LLM judges and fine-tuned encoders.
 
 ### Synthetic Data Evaluation (example-level)
 
 Metrics are computed at example level (answer contains any hallucination vs none). Precision/recall/F1 reflect this binary decision; thresholds and post‑processing can affect absolute values.
+
+**Test Set**: 600 synthetic examples (300 hallucinated + 300 non-hallucinated) generated with GPT-5-mini for fair evaluation.
 
 *When trained and evaluated on domain-specific synthetic data, tiny models dominate (LettuceDetect-base shown without synthetic training):*
 
@@ -240,7 +234,7 @@ Metrics are computed at example level (answer contains any hallucination vs none
 | **TinyLettuce-17M** | **17M** | 84.56 | 98.21 | **90.87** | **CPU** |
 | **TinyLettuce-32M** | **32M** | 80.36 | 99.10 | 88.76 | **CPU** |
 | **TinyLettuce-68M** | **68M** | **89.54** | 95.96 | **92.64** | **CPU** |
-| LettuceDetect-base (ModernBERT) | 139M | 79.06 | 98.21 | 87.60 | GPU |
+| LettuceDetect-base (ModernBERT) | 150M | 79.06 | 98.21 | 87.60 | GPU |
 | GPT-5-mini | ~200B | 71.95 | **100.00** | 83.69 | API/GPU |
 | GPT-OSS-120B | 120B | 72.21 | 98.64 | 83.38 | GPU |
 | Qwen3-235B | 235B | 66.74 | 99.32 | 79.84 | GPU |
@@ -254,7 +248,7 @@ Metrics are computed at example level (answer contains any hallucination vs none
 | **TinyLettuce-17M** | **17M** | 68.52 |
 | **TinyLettuce-32M** | **32M** | 72.15 |
 | **TinyLettuce-68M** | **68M** | **74.97** |
-| LettuceDetect-base (ModernBERT) | — | 76.07 |
+| LettuceDetect-base (ModernBERT) | 150M | 76.07 |
 | LettuceDetect-large (ModernBERT) | 395M | **79.22** |
 | Llama-2-13B (RAGTruth FT) | 13B | 78.70 |
 
@@ -262,7 +256,7 @@ TinyLettuce Ettin models demonstrate impressive performance given their compact 
 
 Baselines and judges: we compare against commonly used LLM judges (e.g., GPT‑5‑mini, GPT‑OSS‑120B, Qwen3‑235B) and fine‑tuned encoders/decoders reported in RAGTruth and follow‑up work (e.g., Llama‑2‑13B FT). Beyond benchmarks, deployment characteristics often determine real‑world value.
 
-### Evaluation Protocol
+### Evaluation Method
 
 - Span construction from tokens: threshold 0.5 on token hallucination prob; contiguous tokens merged into spans.
 - Reported F1 is example‑level unless explicitly noted.
@@ -277,7 +271,7 @@ python scripts/evaluate.py \
 
 ## Real‑Time CPU Inference
 
-TinyLettuce's biggest advantage isn't just accuracy — it's accessibility. These models run in real time on standard CPUs, making hallucination detection practical to deploy widely.
+TinyLettuce's biggest advantage isn't just accuracy — it's accessibility ⚡. These models run in real time on standard CPUs, making hallucination detection practical to deploy widely.
 
 ### End-to-End Workflow
 
@@ -286,18 +280,12 @@ TinyLettuce's biggest advantage isn't just accuracy — it's accessibility. Thes
 python scripts/generate_synthetic_data.py \
   --dataset rag-mini-bioasq \
   --num-samples 50000 \
-  --model gpt-4o-mini \
+  --model gpt-oss-120b \
   --batch-size 50 \
+  --output-format ragtruth \
   --output data/synthetic_large.json
 
 # Step 2: Train TinyLettuce model
-python - << 'PY'
-import json
-a = json.load(open('data/ragtruth/ragtruth_data.json'))
-b = json.load(open('data/synthetic_large.json'))
-json.dump(a + b, open('data/train_combined_large.json','w'))
-PY
-
 python scripts/train.py \
   --ragtruth-path data/train_combined_large.json \
   --model-name jhu-clsp/ettin-encoder-17m \
@@ -312,22 +300,9 @@ python scripts/start_api.py prod --model output/tinylettuce_17m
 
 ---
 
-## Key Takeaways
-
-**Small Specialized > Large Generalist**: TinyLettuce-68M (92.64% F1) outperforms Qwen3-235B (79.84% F1) while being 14,000x smaller. Task-specific training beats raw parameter count.
-
-**Dramatic Cost Reduction**: Synthetic data generation costs significantly less than manual annotation. CPU inference eliminates expensive API calls and GPU requirements.
-
-**Real-Time CPU Inference**: TinyLettuce models achieve <50ms latency and 1000+ req/s on standard CPUs, making hallucination detection practical for any deployment.
-
-**Synthetic Data Breakthrough**: RAGFactChecker-generated synthetic data enables 90%+ F1 scores - higher than what these same models achieve on manually annotated RAGTruth data.
-
-**Complete Open Pipeline**: End-to-end framework from data generation to model deployment available under MIT license. No expensive GPUs or API calls required.
-
-
 ## Bonus: Triplet‑Based RAGFactChecker
 
-We have implemented a triplet-based hallucination detection model that you can use the same way as the standard lettucecedetect models.
+We have implemented a triplet-based hallucination detection model that you can use the same way as the standard lettucedetect models.
 
 Generate triplets from any text:
 ```python
@@ -388,7 +363,7 @@ print(result)
 #}
 ```
 
-This complements token/span detectors with interpretable, fact‑level explanations.
+This complements token/span detectors with interpretable, fact-level explanations.
 
 ---
 
@@ -396,7 +371,7 @@ This complements token/span detectors with interpretable, fact‑level explanati
 
 - Results labeled “synthetic” reflect evaluation on generated data; real‑world performance depends on domain match. Consider adding a small, manually curated eval set.
 - Baselines: we report GPT‑5‑mini and open‑source LLM baselines where available; prompt configuration impacts absolute scores.
-- Metrics: synthetic and RAGTruth F1 are span‑level unless otherwise noted; thresholds and post‑processing influence outcomes.
+- Metrics: synthetic and RAGTruth F1 are example-level unless otherwise noted; thresholds and post‑processing influence outcomes.
 
 ---
 
@@ -405,14 +380,14 @@ This complements token/span detectors with interpretable, fact‑level explanati
 If you find this work useful, please cite it as follows:
 
 ```bibtex
-@misc{Kovacs:2025:TinyLettuce,
-      title={TinyLettuce: Training Efficient Hallucination Detectors with Synthetic Data Generation}, 
+@misc{Kovacs:2025,
+      title={LettuceDetect: A Hallucination Detection Framework for RAG Applications}, 
       author={Ádám Kovács and Gábor Recski},
       year={2025},
-      eprint={2502.xxxxx},
+      eprint={2502.17125},
       archivePrefix={arXiv},
       primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2502.xxxxx}, 
+      url={https://arxiv.org/abs/2502.17125}, 
 }
 ```
 
