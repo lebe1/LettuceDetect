@@ -26,7 +26,11 @@ Our models are inspired from the [Luna](https://aclanthology.org/2025.coling-ind
 
 ## 🚀 Latest Updates
 
-- **May 18, 2025** - Released version **0.1.7**: Multilingual support (thanks to EuroBERT) for 7 languages: English, German, French, Spanish, Italian, Polish, and Chinese!
+- **August 31, 2025** - Released version **0.1.8**: Added TinyLettuce Ettin models for 17M, 32M, and 68M variants, Hallucination generation pipeline and added RAGFactChecker for triplet-based hallucination detection.
+  - See [TinyLettuce Blog Post](https://huggingface.co/KRLabsOrg/tinylettuce-68b42a66b8b6aaa4bf287bf4) for more details.
+  - Our collection on Hugging Face: [TinyLettuce](https://huggingface.co/collections/KRLabsOrg/tinylettuce-68b42a66b8b6aaa4bf287bf4)
+  - See the documentation: [TinyLettuce Documentation](docs/TINYLETTUCE.md) for more details.
+- May 18, 2025 - Released version **0.1.7**: Multilingual support (thanks to EuroBERT) for 7 languages: English, German, French, Spanish, Italian, Polish, and Chinese!
 - Up to **17 F1 points improvement** over baseline LLM judges like GPT-4.1-mini across different languages
 - **EuroBERT models**: We've trained base/210M (faster) and large/610M (more accurate) variants
 - You can now also use **LLM baselines** for hallucination detection (see below)
@@ -60,8 +64,8 @@ pip install lettucedetect -U
 Check out our models published to Huggingface: 
 
 **English Models**:
-- Base: [KRLabsOrg/lettucedetect-base-modernbert-en-v1](https://huggingface.co/KRLabsOrg/lettucedetect-base-modernbert-en-v1)
-- Large: [KRLabsOrg/lettucedetect-large-modernbert-en-v1](https://huggingface.co/KRLabsOrg/lettucedetect-large-modernbert-en-v1)
+- Base: [KRLabsOrg/lettucedect-base-modernbert-en-v1](https://huggingface.co/KRLabsOrg/lettucedect-base-modernbert-en-v1)
+- Large: [KRLabsOrg/lettucedect-large-modernbert-en-v1](https://huggingface.co/KRLabsOrg/lettucedect-large-modernbert-en-v1)
 
 **Multilingual Models**:
 We've trained 210m and 610m variants of EuroBERT, see our HuggingFace collection: [HF models](https://huggingface.co/collections/KRLabsOrg/multilingual-hallucination-detection-682a2549c18ecd32689231ce)
@@ -266,7 +270,7 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --model MODEL         Path or huggingface URL to the model. The default value is
-                        "KRLabsOrg/lettucedetect-base-modernbert-en-v1".
+                        "KRLabsOrg/lettucedect-base-modernbert-en-v1".
   --method {transformer}
                         Hallucination detection method. The default value is
                         "transformer".

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lettucedetect"
-version = "0.1.7"
+version = "0.1.8"
 description = "Lettucedetect is a framework for detecting hallucinations in RAG applications."
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
@@ -23,7 +23,8 @@ dependencies = [
     "tqdm>=4.65.0",
     "scikit-learn>=1.6.1",
     "numpy>=2.2.2",
-    "openai==1.66.3",
+    "openai>=1.66.3",
+    "rag-fact-checker",
 ]
 
 [project.urls]

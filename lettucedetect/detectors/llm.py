@@ -12,25 +12,26 @@ from openai import OpenAI
 from lettucedetect.detectors.cache import CacheManager
 from lettucedetect.detectors.prompt_utils import LANG_TO_PASSAGE, Lang, PromptUtils
 
-ANNOTATE_SCHEMA = [
-    {
-        "type": "function",
-        "function": {
-            "name": "annotate",
-            "description": "Return hallucinated substrings from the answer relative to the source.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "hallucination_list": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    }
-                },
-                "required": ["hallucination_list"],
+# JSON schema for structured response format
+HALLUCINATION_SCHEMA = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "hallucination_detection",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "hallucination_list": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of exact text spans from the answer that are hallucinated",
+                }
             },
+            "required": ["hallucination_list"],
+            "additionalProperties": False,
         },
-    }
-]
+        "strict": True,
+    },
+}
 
 
 class LLMDetector:
@@ -174,11 +175,10 @@ class LLMDetector:
                     # Use the full LLM prompt here, not the raw context
                     {"role": "user", "content": llm_prompt},
                 ],
-                tools=ANNOTATE_SCHEMA,
-                tool_choice={"type": "function", "function": {"name": "annotate"}},
+                response_format=HALLUCINATION_SCHEMA,
                 temperature=self.temperature,
             )
-            cached = resp.choices[0].message.tool_calls[0].function.arguments
+            cached = resp.choices[0].message.content
             self.cache.set(cache_key, cached)
 
         try:
@@ -204,8 +204,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
         # Use PromptUtils to format the context and question
         full_prompt = PromptUtils.format_context(context, question, self.lang)
         return self._predict(full_prompt, answer)
@@ -218,8 +220,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
         return self._predict(prompt, answer)
 
     def predict_prompt_batch(
@@ -232,8 +236,10 @@ class LLMDetector:
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.
         """
-        if output_format != "spans":
-            raise ValueError("LLMDetector only supports 'spans' output_format.")
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"LLMDetector doesn't support '{output_format}' format. Use 'tokens' or 'spans'"
+            )
 
         with ThreadPoolExecutor(max_workers=30) as pool:
             futs = [pool.submit(self._predict, p, a) for p, a in zip(prompts, answers)]

@@ -43,6 +43,11 @@ class TransformerDetector(BaseDetector):
         :param answer: The answer string.
         :param output_format: "tokens" to return token-level predictions, or "spans" to return grouped spans.
         """
+        if output_format not in ["tokens", "spans"]:
+            raise ValueError(
+                f"TransformerDetector doesn't support '{output_format}' format. "
+                "Use 'tokens' or 'spans'"
+            )
         # Use the shared tokenization logic from HallucinationDataset
         encoding, _, offsets, answer_start_token = HallucinationDataset.prepare_tokenized_input(
             self.tokenizer, prompt, answer, self.max_length
