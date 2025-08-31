@@ -27,7 +27,7 @@ Our models are inspired from the [Luna](https://aclanthology.org/2025.coling-ind
 ## 🚀 Latest Updates
 
 - **August 31, 2025** - Released version **0.1.8**: Added TinyLettuce Ettin models for 17M, 32M, and 68M variants, Hallucination generation pipeline and added RAGFactChecker for triplet-based hallucination detection.
-  - See [TinyLettuce Blog Post](https://huggingface.co/KRLabsOrg/tinylettuce-68b42a66b8b6aaa4bf287bf4) for more details.
+  - See [TinyLettuce Blog Post](https://huggingface.co/blog/adaamko/tinylettuce) for more details.
   - Our collection on Hugging Face: [TinyLettuce](https://huggingface.co/collections/KRLabsOrg/tinylettuce-68b42a66b8b6aaa4bf287bf4)
   - See the documentation: [TinyLettuce Documentation](docs/TINYLETTUCE.md) for more details.
 - May 18, 2025 - Released version **0.1.7**: Multilingual support (thanks to EuroBERT) for 7 languages: English, German, French, Spanish, Italian, Polish, and Chinese!
