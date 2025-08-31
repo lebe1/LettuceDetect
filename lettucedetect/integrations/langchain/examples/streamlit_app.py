@@ -166,7 +166,7 @@ def main():
 
     @st.cache_resource
     def get_detector():
-        model_path = "output/hallucination_detection_ettin_17m"
+        model_path = "KRLabsOrg/tinylettuce-ettin-17m-en"
         if os.path.exists(model_path):
             return HallucinationDetector(method="transformer", model_path=model_path)
         else:
@@ -200,12 +200,8 @@ def main():
 
         # Create callbacks
         detection_callback = LettuceStreamingCallback(
-            method="transformer"
-            if os.path.exists("output/hallucination_detection_ettin_17m")
-            else "rag_fact_checker",
-            model_path="output/hallucination_detection_ettin_17m"
-            if os.path.exists("output/hallucination_detection_ettin_17m")
-            else None,
+            method="transformer",
+            model_path="KRLabsOrg/tinylettuce-ettin-17m-en",
             context=[context],
             question=question,
             check_every=10,
