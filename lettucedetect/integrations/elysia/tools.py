@@ -92,7 +92,10 @@ async def detect_hallucinations(
                 conf = span.get("confidence", 0)
                 start = span.get("start", 0)
                 end = span.get("end", 0)
-                issue_details.append(f"'{text}' at position {start}-{end} (confidence: {conf:.2f})")
+
+                issue_str = f"'{text}' at position {start}-{end}"
+                issue_str += f" (confidence: {conf:.2f})" if conf > 0.0 else ""
+                issue_details.append(issue_str)
 
             summary = f"Detected {len(spans)} potential hallucination(s) in the answer. "
             summary += f"Most problematic spans: {', '.join(issue_details)}. "
