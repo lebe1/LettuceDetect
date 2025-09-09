@@ -16,6 +16,7 @@ LANG_TO_PASSAGE = {
     "it": "brano",
     "pl": "fragment",
     "cn": "段落",
+    "hu": "szövegrészlet",
 }
 
 # Full language names for each language code
@@ -27,6 +28,7 @@ LANG_TO_FULL_NAME = {
     "it": "Italian",
     "pl": "Polish",
     "cn": "Chinese",
+    "hu": "Hungarian",
 }
 
 PROMPT_DIR = Path(__file__).parent.parent / "prompts"

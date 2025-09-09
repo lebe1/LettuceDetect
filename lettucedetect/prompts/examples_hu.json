@@ -1,0 +1,36 @@
+[
+    {
+        "source": "Melyik Franciaország fővárosa? Mennyi Franciaország lakossága? Franciaország egy európai ország. Franciaország fővárosa Párizs. Franciaország lakossága 67 millió.",
+        "answer": "Franciaország fővárosa Párizs. Franciaország lakossága 69 millió.",
+        "hallucination_list": [
+            "Franciaország lakossága 69 millió."
+        ]
+    },
+    {
+        "source": "Melyik Franciaország fővárosa? Mennyi Franciaország lakossága? Franciaország fővárosa Párizs. Franciaország lakossága 67 millió.",
+        "answer": "Franciaország fővárosa Párizs. Franciaország lakossága 67 millió, és a hivatalos nyelv a spanyol.",
+        "hallucination_list": [
+            "a hivatalos nyelv a spanyol"
+        ]
+    },
+    {
+        "source": "Mi Ausztria fővárosa? Mennyi Ausztria lakossága? Ausztria egy európai ország. Ausztria fővárosa Bécs. Ausztria lakossága 9,1 millió.",
+        "answer": "Ausztria fővárosa Bécs. Ausztria lakossága 9,1 millió.",
+        "hallucination_list": []
+    },
+    {
+        "source": "Ki volt az első ember a Holdon? Mikor történt ez? Neil Armstrong volt az első ember, aki a Holdra lépett. Ez a történelmi esemény 1969. július 20-án történt, az Apollo–11 küldetés során.",
+        "answer": "Neil Armstrong volt az első ember, aki a Holdra lépett. Ez a történelmi esemény 1969. július 16-án történt, az Apollo–11 küldetés során.",
+        "hallucination_list": [
+            "Ez a történelmi esemény 1969. július 16-án történt"
+        ]
+    },
+    {
+        "source": "Mi a legmagasabb hegy a világon? A Mount Everest a legmagasabb hegy a világon, 8848 méterrel a tengerszint felett. A Himalája Mahálangúr-Himal szubrégiójában található, Nepál és Tibet határán.",
+        "answer": "A Mount Everest a legmagasabb hegy a világon, 8848 méterrel a tengerszint felett. A Mahálangúr-Himal szubrégióban található, India és Kína határán.",
+        "hallucination_list": [
+            "India és Kína határán"
+        ]
+    }
+]
+

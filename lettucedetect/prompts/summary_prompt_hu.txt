@@ -1,0 +1,4 @@
+Foglalja össze az alábbi szöveget:
+${text}
+output:
+
