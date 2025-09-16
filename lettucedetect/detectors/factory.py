@@ -23,5 +23,9 @@ def make_detector(method: str, **kwargs) -> BaseDetector:
         from lettucedetect.detectors.llm import LLMDetector
 
         return LLMDetector(**kwargs)
+    elif method == "number":
+        from lettucedetect.detectors.number import NumberDetector
+
+        return NumberDetector()
     else:
         raise ValueError(f"Unknown detector method: {method}. Use one of: transformer, llm")
