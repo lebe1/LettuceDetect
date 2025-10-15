@@ -100,7 +100,7 @@ class HallucinationDataset(Dataset):
         encoding = tokenizer(
             context,
             answer,
-            truncation="only_first",
+            truncation=True,
             max_length=max_length,
             return_offsets_mapping=True,
             return_tensors="pt",
