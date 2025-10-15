@@ -126,6 +126,10 @@ class HallucinationDataset(Dataset):
         # Initialize labels: -100 for tokens before the asnwer, 0 for tokens in the answer.
         labels = [-100] * encoding["input_ids"].shape[1]
 
+        print("DEBUG: input_ids shape =", encoding["input_ids"].shape)
+        print("DEBUG: attention_mask shape =", encoding["attention_mask"].shape)
+
+
         return encoding, labels, offsets, answer_start_token
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
