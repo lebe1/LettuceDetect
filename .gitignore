@@ -170,6 +170,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# macOS
+.DS_Store
+
 # data/
 data/
 
@@ -179,3 +182,4 @@ temp/
 
 # cache/
 lettucedetect/cache/
+testing/

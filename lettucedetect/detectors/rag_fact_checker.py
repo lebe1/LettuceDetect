@@ -1,6 +1,8 @@
 """Simple RAGFactChecker detector wrapper for lettuceDetect factory pattern."""
 
-from typing import Any, Dict, List
+from __future__ import annotations
+
+from typing import Any
 
 from lettucedetect.detectors.base import BaseDetector
 
@@ -14,9 +16,9 @@ class RAGFactCheckerDetector(BaseDetector):
 
     def __init__(
         self,
-        openai_api_key: str = None,
+        openai_api_key: str | None = None,
         model: str = "gpt-4o",
-        base_url: str = None,
+        base_url: str | None = None,
         temperature: float = 0.0,
         **kwargs,
     ):
@@ -38,12 +40,12 @@ class RAGFactCheckerDetector(BaseDetector):
 
     def predict(
         self,
-        context: List[str],
+        context: list[str],
         answer: str,
-        question: str = None,
+        question: str | None = None,
         output_format: str = "tokens",
         **kwargs,
-    ) -> List[Dict[str, Any]] | Dict[str, Any]:
+    ) -> list[dict[str, Any]] | dict[str, Any]:
         """Predict hallucinations using RAGFactChecker.
 
         :param context: List of context documents
@@ -81,13 +83,13 @@ class RAGFactCheckerDetector(BaseDetector):
 
     def predict_prompt(
         self, prompt: str, answer: str, output_format: str = "tokens"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Predict using a single prompt string as context."""
         return self.predict([prompt], answer, output_format=output_format)
 
     def predict_prompt_batch(
-        self, prompts: List[str], answers: List[str], output_format: str = "tokens"
-    ) -> List[List[Dict[str, Any]]]:
+        self, prompts: list[str], answers: list[str], output_format: str = "tokens"
+    ) -> list[list[dict[str, Any]]]:
         """Batch prediction using RAGFactChecker's batch processing."""
         if len(prompts) != len(answers):
             raise ValueError("Number of prompts must match number of answers")
@@ -108,7 +110,7 @@ class RAGFactCheckerDetector(BaseDetector):
 
         return converted_results
 
-    def _convert_to_tokens(self, answer: str, rag_result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _convert_to_tokens(self, answer: str, rag_result: dict[str, Any]) -> list[dict[str, Any]]:
         """Convert RAGFactChecker result to token format."""
         tokens = answer.split()
         hallucinated_triplets = rag_result.get("hallucinated_triplets", [])
@@ -130,7 +132,7 @@ class RAGFactCheckerDetector(BaseDetector):
 
         return token_predictions
 
-    def _convert_to_spans(self, answer: str, rag_result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _convert_to_spans(self, answer: str, rag_result: dict[str, Any]) -> list[dict[str, Any]]:
         """Convert RAGFactChecker result to span format with improved triplet matching."""
         spans = []
         hallucinated_triplets = rag_result.get("hallucinated_triplets", [])
@@ -195,7 +197,7 @@ class RAGFactCheckerDetector(BaseDetector):
         # Merge overlapping spans
         return self._merge_overlapping_spans(spans)
 
-    def _merge_overlapping_spans(self, spans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _merge_overlapping_spans(self, spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Merge overlapping spans to avoid duplicates."""
         if not spans:
             return spans

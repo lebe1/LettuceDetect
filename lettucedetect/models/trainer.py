@@ -12,6 +12,12 @@ from lettucedetect.models.evaluator import evaluate_model, print_metrics
 
 
 class Trainer:
+    """Token classification trainer with epoch-based training and validation.
+
+    Trains a model using AdamW, evaluates on a test set after each epoch,
+    and saves the best checkpoint based on hallucinated-class F1.
+    """
+
     def __init__(
         self,
         model: Module,

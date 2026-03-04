@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
+from lettucedetect.datasets.hallucination_dataset import HallucinationDataset
 from lettucedetect.detectors.prompt_utils import PromptUtils
 from lettucedetect.detectors.transformer import TransformerDetector
 from lettucedetect.models.inference import HallucinationDetector
@@ -129,19 +130,15 @@ class TestTransformerDetector:
 
     def test_predict(self):
         """Test predict method."""
-
-        # Create a proper mock encoding with input_ids as a tensor attribute
-        class MockEncoding:
-            def __init__(self):
-                self.input_ids = torch.tensor([[101, 102, 103]])
-
-        mock_encoding = MockEncoding()
-        mock_labels = torch.tensor([0, 0, 0])
-        mock_offsets = torch.tensor([[0, 0], [0, 1], [1, 2]])
-        mock_answer_start = 1
-
-        # Patch the _predict method to avoid the actual implementation
-        with patch.object(TransformerDetector, "_predict", return_value=[]):
+        # Patch internals to avoid actual model inference
+        with (
+            patch.object(
+                TransformerDetector,
+                "_group_passages_into_chunks",
+                return_value=[["This is a test context."]],
+            ),
+            patch.object(TransformerDetector, "_predict_single", return_value=[]),
+        ):
             detector = TransformerDetector(model_path="dummy_path")
             context = ["This is a test context."]
             answer = "This is a test answer."
@@ -175,3 +172,191 @@ class TestTransformerDetector:
         # Check that the prompt contains the text to summarize
         assert "This is a text to summarize." in prompt
         assert "Summarize" in prompt
+
+
+class TestChunking:
+    """Tests for automatic context chunking when input exceeds max_length."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up a TransformerDetector with mocked model/tokenizer."""
+        with (
+            patch(
+                "lettucedetect.detectors.transformer.AutoTokenizer.from_pretrained",
+            ) as tok_cls,
+            patch(
+                "lettucedetect.detectors.transformer.AutoModelForTokenClassification.from_pretrained",
+            ) as model_cls,
+        ):
+            # Set up a realistic tokenizer mock
+            self.mock_tokenizer = MagicMock()
+            self.mock_model = MagicMock()
+            tok_cls.return_value = self.mock_tokenizer
+            model_cls.return_value = self.mock_model
+
+            self.detector = TransformerDetector(model_path="dummy", max_length=32)
+            yield
+
+    def test_aggregation_uses_max(self):
+        """Max aggregation: highest hallucination prob across chunks wins."""
+        # Simulate two chunks with different probabilities for the same tokens
+        chunk1_tokens = [
+            {"token": "The", "pred": 0, "prob": 0.1},
+            {"token": "answer", "pred": 0, "prob": 0.3},
+            {"token": "is", "pred": 1, "prob": 0.8},
+        ]
+        chunk2_tokens = [
+            {"token": "The", "pred": 0, "prob": 0.2},
+            {"token": "answer", "pred": 1, "prob": 0.6},
+            {"token": "is", "pred": 0, "prob": 0.4},
+        ]
+
+        with patch.object(self.detector, "_predict_single") as mock_single:
+            mock_single.side_effect = [chunk1_tokens, chunk2_tokens]
+
+            # Mock _build_spans_from_tokens for the spans path
+            with patch.object(self.detector, "_build_spans_from_tokens", return_value=[]):
+                result = self.detector._predict_chunked(
+                    ["chunk1", "chunk2"], "The answer is", output_format="tokens"
+                )
+
+        assert len(result) == 3
+        # Token 0: max(0.1, 0.2) = 0.2 → pred 0
+        assert result[0]["prob"] == 0.2
+        assert result[0]["pred"] == 0
+        # Token 1: max(0.3, 0.6) = 0.6 → pred 1 (≥ 0.5)
+        assert result[1]["prob"] == 0.6
+        assert result[1]["pred"] == 1
+        # Token 2: max(0.8, 0.4) = 0.8 → pred 1
+        assert result[2]["prob"] == 0.8
+        assert result[2]["pred"] == 1
+
+    def test_group_passages_single_group(self):
+        """When all passages fit, _group_passages_into_chunks returns one group."""
+
+        def tokenizer_side_effect(text, **kwargs):
+            # Approximate: 1 token per word
+            words = len(text.split()) if text else 1
+            return {"input_ids": torch.zeros(1, words, dtype=torch.long)}
+
+        self.mock_tokenizer.side_effect = tokenizer_side_effect
+
+        with patch(
+            "lettucedetect.detectors.transformer.PromptUtils.format_context",
+            return_value="short prompt with passages",
+        ):
+            groups = self.detector._group_passages_into_chunks(
+                ["passage one", "passage two"], "What?", "short answer"
+            )
+        assert len(groups) == 1
+        assert groups[0] == ["passage one", "passage two"]
+
+    def test_group_passages_multiple_groups(self):
+        """When passages exceed budget, they should be split into multiple groups."""
+        # max_length=32, answer=5 tokens → total_budget = 32-5-3 = 24
+        # instruction_overhead = 10 tokens → passage_budget = 24-10 = 14
+        # Each passage = 10 tokens → 2 passages won't fit (10+1+10=21 > 14), so 1 per group
+
+        def tokenizer_side_effect(text, **kwargs):
+            if text == "short answer":
+                return {"input_ids": torch.zeros(1, 5, dtype=torch.long)}
+            if text.startswith("passage"):
+                return {"input_ids": torch.zeros(1, 10, dtype=torch.long)}
+            # "full_prompt" → 50 tokens (exceeds budget, triggers chunking)
+            if "full_prompt" in text:
+                return {"input_ids": torch.zeros(1, 50, dtype=torch.long)}
+            # "minimal" → 10 tokens (instruction overhead)
+            return {"input_ids": torch.zeros(1, 10, dtype=torch.long)}
+
+        self.mock_tokenizer.side_effect = tokenizer_side_effect
+
+        format_calls = [0]
+
+        def format_side_effect(ctx, q, lang):
+            format_calls[0] += 1
+            if format_calls[0] == 1:
+                return "full_prompt_long"  # First call: all passages → triggers chunking
+            return "minimal"  # Second call: [""] → measures instruction overhead
+
+        with patch(
+            "lettucedetect.detectors.transformer.PromptUtils.format_context",
+            side_effect=format_side_effect,
+        ):
+            groups = self.detector._group_passages_into_chunks(
+                ["passage A", "passage B", "passage C"], "What?", "short answer"
+            )
+
+        # With passage_budget = 14 and each passage = 10 tokens,
+        # each group holds 1 passage (10 < 14, but 10+1+10 = 21 > 14)
+        assert len(groups) == 3
+        assert groups[0] == ["passage A"]
+        assert groups[1] == ["passage B"]
+        assert groups[2] == ["passage C"]
+
+    def test_predict_uses_passage_chunking(self):
+        """predict() should use _group_passages_into_chunks for chunking."""
+        with (
+            patch.object(
+                self.detector,
+                "_group_passages_into_chunks",
+                return_value=[["p1"], ["p2"]],
+            ) as mock_group,
+            patch.object(
+                self.detector,
+                "_predict_chunked",
+                return_value=[{"token": "x", "pred": 0, "prob": 0.1}],
+            ) as mock_chunked,
+            patch(
+                "lettucedetect.detectors.transformer.PromptUtils.format_context",
+                side_effect=lambda ctx, q, lang: f"prompt_{ctx[0]}",
+            ),
+        ):
+            self.detector.predict(["p1", "p2"], "answer", "What?", "tokens")
+            mock_group.assert_called_once()
+            mock_chunked.assert_called_once_with(["prompt_p1", "prompt_p2"], "answer", "tokens")
+
+
+class TestAnswerStartToken:
+    """Tests for the answer_start_token fix in prepare_tokenized_input."""
+
+    def test_answer_start_token_basic(self):
+        """answer_start_token should point to the first answer token."""
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        context = "The capital of France is Paris."
+        answer = "Paris is the capital."
+
+        _, _, offsets, answer_start = HallucinationDataset.prepare_tokenized_input(
+            tokenizer, context, answer, max_length=512
+        )
+
+        # answer_start should be within bounds
+        assert answer_start > 0
+        assert answer_start < offsets.size(0)
+        # The offset at answer_start should be non-zero (actual token, not special)
+        assert offsets[answer_start][1].item() > offsets[answer_start][0].item()
+
+    def test_answer_start_token_with_truncation(self):
+        """answer_start_token should be correct even when context is truncated."""
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        # Create a very long context that will be truncated at max_length=32
+        context = "word " * 200  # ~200 tokens
+        answer = "short answer"
+
+        encoding, _, offsets, answer_start = HallucinationDataset.prepare_tokenized_input(
+            tokenizer, context, answer, max_length=32
+        )
+
+        total_len = encoding["input_ids"].shape[1]
+        assert total_len == 32  # Should be truncated to max_length
+
+        # answer_start should be within the actual sequence
+        assert answer_start > 0
+        assert answer_start < total_len
+
+        # The answer tokens should be at the end (before trailing [SEP])
+        # Verify by checking that the text at answer_start offset is non-empty
+        assert offsets[answer_start][1].item() > offsets[answer_start][0].item()
