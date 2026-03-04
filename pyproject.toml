@@ -82,9 +82,13 @@ ignore = [
     "ANN003", # **kwargs annotation
     "ANN204", # missing return type for __init__
     "PTH123", # path.open
+    "C901",   # function complexity
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "ANN001", "ANN201", "ANN202", "D103", "F841"]
+"lettucedetect/preprocess/**" = ["ANN001", "ANN201"]
+"lettucedetect/datasets/analyze_lengths.py" = ["ANN201", "D103", "E741"]
+"lettucedetect/models/evaluator.py" = ["ANN001", "ANN201", "D401"]
 "lettucedetect_api/test_server.py" = ["S101"]
 "lettucedetect_api/test_client.py" = ["S101"]

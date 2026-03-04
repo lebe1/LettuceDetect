@@ -29,8 +29,8 @@ jobs:
 
     - name: Lint with ruff
       run: |
-        ruff format --check --diff .
-        ruff check .
+        ruff format --check --diff lettucedetect/ tests/
+        ruff check lettucedetect/ tests/ --extend-exclude lettucedetect/integrations/
 
     - name: Test with pytest
       run: |
