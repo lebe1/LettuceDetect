@@ -8,7 +8,6 @@ to handle both with-docs and without-docs scenarios.
 import json
 import random
 import re
-import time
 
 import requests
 
@@ -122,7 +121,6 @@ def get_documentation_for_instance(
         doc = fetch_context7_docs(lib, short_query)
         if doc:
             docs[lib] = doc
-        time.sleep(0.5)
 
     return docs
 

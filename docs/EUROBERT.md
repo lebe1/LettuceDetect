@@ -1,7 +1,7 @@
 # 🥬 LettuceDetect Goes Multilingual: Fine-tuning EuroBERT on Synthetic RAGTruth Translations
 
 <p align="center">
-  <img src="https://github.com/KRLabsOrg/LettuceDetect/blob/feature/cn_llm_eval/assets/lettuce_detective_multi.png?raw=true" alt="LettuceDetect Multilingual Task Force" width="520"/>
+  <img src="https://github.com/KRLabsOrg/LettuceDetect/blob/main/assets/lettuce_detective_multi.png?raw=true" alt="LettuceDetect Multilingual Task Force" width="520"/>
   <br>
   <em>Expanding hallucination detection across languages for RAG pipelines.</em>
 </p>

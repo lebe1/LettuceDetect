@@ -1,15 +1,21 @@
-"""Phase 6: Inject hallucinations using LLM with JSON span annotations."""
+"""Phase 6: Inject hallucinations using LLM with JSON span annotations.
 
+Supports both sequential (remote API) and async batch (local vLLM) modes.
+Set BATCH_SIZE>1 env var for parallel requests to local vLLM.
+"""
+
+import asyncio
 import json
 import re
 import textwrap
 import time
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from .config import (
     API_BASE_URL,
     API_KEY,
+    BATCH_SIZE,
     HALLUCINATED_PATH,
     HALLUCINATION_TEMPERATURE,
     HALLUCINATION_TYPES,
@@ -177,6 +183,75 @@ def load_existing_hallucinations(path=HALLUCINATED_PATH) -> dict[str, dict]:
     return existing
 
 
+async def _inject_one_async(
+    aclient: AsyncOpenAI,
+    model: str,
+    clean_answer: str,
+    hall_type: str,
+    user_query: str,
+    context: str,
+) -> dict | None:
+    """Async version of inject_hallucination for batch processing."""
+    user_msg = f"""Hallucination type to inject: {hall_type.upper()}
+
+User's original request: {user_query[:500]}
+
+Context (source code):
+{context[:2000]}
+
+Correct code to modify:
+{clean_answer}
+
+Generate a hallucinated version with {hall_type} error(s). Return JSON only."""
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = await aclient.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": INJECTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                temperature=HALLUCINATION_TEMPERATURE,
+                max_tokens=4000,
+            )
+            raw = response.choices[0].message.content.strip()
+            json_match = re.search(r"\{[\s\S]*\}", raw)
+            if not json_match:
+                continue
+            result = json.loads(json_match.group())
+            if "hallucinated_code" not in result or "changes" not in result:
+                continue
+            if result["hallucinated_code"].strip() == clean_answer.strip():
+                continue
+            return result
+        except Exception:
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+            else:
+                return None
+    return None
+
+
+def _process_result(result, instance_id, hall_type, fmt_data, model):
+    """Process a single injection result into a JSONL entry."""
+    if result is None:
+        return None
+    hallucinated_code = result["hallucinated_code"]
+    changes = result.get("changes", [])
+    labels = build_labels_from_changes(hallucinated_code, changes, hall_type)
+    if not labels:
+        return None
+    return {
+        "instance_id": instance_id,
+        "hallucinated_answer": hallucinated_code,
+        "labels": labels,
+        "hallucination_type": hall_type,
+        "injector_model": model,
+        "format_type": fmt_data.get("format_type", "fragment"),
+    }
+
+
 def run(
     instances_to_inject: list[dict],
     formats: dict[str, dict],
@@ -185,15 +260,19 @@ def run(
     base_url: str = API_BASE_URL,
     model: str = MODEL,
 ):
-    """Run Phase 6: Inject hallucinations into selected instances."""
+    """Run Phase 6: Inject hallucinations into selected instances.
+
+    Uses async batch processing when BATCH_SIZE > 1 (for local vLLM).
+    Falls back to sequential processing for remote APIs (BATCH_SIZE=1).
+    """
     print("=" * 60)
     print("Phase 6: Hallucination Injection")
     print("=" * 60)
 
     HALLUCINATED_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
     print(f"Using {base_url} with model {model}")
+    print(f"Batch size: {BATCH_SIZE}")
 
     existing = load_existing_hallucinations()
     print(f"Already processed: {len(existing)}")
@@ -205,6 +284,32 @@ def run(
     ]
     print(f"Remaining: {len(to_process)} instances to inject")
 
+    if BATCH_SIZE > 1:
+        results = _run_batched(to_process, formats, queries, api_key, base_url, model)
+    else:
+        results = _run_sequential(to_process, formats, queries, api_key, base_url, model)
+
+    # Stats
+    type_counts = {}
+    for r in results:
+        t = r["hallucination_type"]
+        type_counts[t] = type_counts.get(t, 0) + 1
+    print("By type:", type_counts)
+
+    if results:
+        avg_spans = sum(len(r["labels"]) for r in results) / len(results)
+        span_sizes = [lab["end"] - lab["start"] for r in results for lab in r["labels"]]
+        print(f"Avg spans per sample: {avg_spans:.1f}")
+        print(
+            f"Span sizes: min={min(span_sizes)}, max={max(span_sizes)}, avg={sum(span_sizes) // len(span_sizes)}"
+        )
+
+    return results
+
+
+def _run_sequential(to_process, formats, queries, api_key, base_url, model):
+    """Sequential processing for remote APIs (rate-limited)."""
+    client = OpenAI(api_key=api_key, base_url=base_url)
     processed = 0
     failed = 0
     no_spans = 0
@@ -219,65 +324,99 @@ def run(
                 failed += 1
                 continue
 
-            # Round-robin hall type
             hall_type = HALLUCINATION_TYPES[i % len(HALLUCINATION_TYPES)]
-
             query = queries.get(instance_id, "")
             context = inst.get("problem_statement", "")[:2000]
 
             result = inject_hallucination(client, model, clean_answer, hall_type, query, context)
+            entry = _process_result(result, instance_id, hall_type, fmt_data, model)
 
-            if result is None:
+            if entry is None:
+                if result is not None:
+                    no_spans += 1
                 failed += 1
                 continue
 
-            hallucinated_code = result["hallucinated_code"]
-            changes = result.get("changes", [])
-
-            # Build labels by matching hallucinated spans in the code
-            labels = build_labels_from_changes(hallucinated_code, changes, hall_type)
-
-            if not labels:
-                no_spans += 1
-                failed += 1
-                continue
-
-            entry = {
-                "instance_id": instance_id,
-                "hallucinated_answer": hallucinated_code,
-                "labels": labels,
-                "hallucination_type": hall_type,
-                "injector_model": model,
-                "format_type": fmt_data.get("format_type", "fragment"),
-            }
             f.write(json.dumps(entry) + "\n")
             f.flush()
-
             results.append(entry)
             processed += 1
 
             if processed % 50 == 0:
                 print(f"  Progress: {processed}/{len(to_process)} (failed: {failed})")
 
-            time.sleep(0.5)
-
     print(f"\nDone: {processed} injected, {failed} failed ({no_spans} had no matchable spans)")
+    return results
 
-    # Stats
-    type_counts = {}
-    for r in results:
-        t = r["hallucination_type"]
-        type_counts[t] = type_counts.get(t, 0) + 1
-    print("By type:", type_counts)
 
-    if results:
-        avg_spans = sum(len(r["labels"]) for r in results) / len(results)
-        span_sizes = [l["end"] - l["start"] for r in results for l in r["labels"]]
-        print(f"Avg spans per sample: {avg_spans:.1f}")
-        print(
-            f"Span sizes: min={min(span_sizes)}, max={max(span_sizes)}, avg={sum(span_sizes) // len(span_sizes)}"
-        )
+def _run_batched(to_process, formats, queries, api_key, base_url, model):
+    """Async batch processing for local vLLM (no rate limiting needed)."""
+    aclient = AsyncOpenAI(api_key=api_key, base_url=base_url)
+    processed = 0
+    failed = 0
+    no_spans = 0
+    results = []
 
+    async def process_batches():
+        nonlocal processed, failed, no_spans
+
+        with open(HALLUCINATED_PATH, "a") as f:
+            for batch_start in range(0, len(to_process), BATCH_SIZE):
+                batch = to_process[batch_start : batch_start + BATCH_SIZE]
+
+                # Build async tasks for the batch
+                tasks = []
+                batch_meta = []
+                for i, inst in enumerate(batch):
+                    global_idx = batch_start + i
+                    instance_id = inst["instance_id"]
+                    fmt_data = formats.get(instance_id, {})
+                    clean_answer = fmt_data.get("answer", "")
+                    if not clean_answer:
+                        failed += 1
+                        continue
+
+                    hall_type = HALLUCINATION_TYPES[global_idx % len(HALLUCINATION_TYPES)]
+                    query = queries.get(instance_id, "")
+                    context = inst.get("problem_statement", "")[:2000]
+
+                    tasks.append(
+                        _inject_one_async(aclient, model, clean_answer, hall_type, query, context)
+                    )
+                    batch_meta.append((instance_id, hall_type, fmt_data))
+
+                if not tasks:
+                    continue
+
+                # Run batch concurrently
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Process results and write immediately
+                for result, (instance_id, hall_type, fmt_data) in zip(batch_results, batch_meta):
+                    if isinstance(result, Exception):
+                        failed += 1
+                        continue
+
+                    entry = _process_result(result, instance_id, hall_type, fmt_data, model)
+                    if entry is None:
+                        if result is not None:
+                            no_spans += 1
+                        failed += 1
+                        continue
+
+                    f.write(json.dumps(entry) + "\n")
+                    f.flush()
+                    results.append(entry)
+                    processed += 1
+
+                if processed % 50 == 0 or batch_start + BATCH_SIZE >= len(to_process):
+                    total = processed + failed
+                    print(
+                        f"  Progress: {total}/{len(to_process)} ({processed} ok, {failed} failed)"
+                    )
+
+    asyncio.run(process_batches())
+    print(f"\nDone: {processed} injected, {failed} failed ({no_spans} had no matchable spans)")
     return results
 
 

@@ -1,8 +1,10 @@
 """Simple, clean RAGFactChecker wrapper for lettuceDetect."""
 
+from __future__ import annotations
+
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class RAGFactChecker:
@@ -17,9 +19,9 @@ class RAGFactChecker:
 
     def __init__(
         self,
-        openai_api_key: Optional[str] = None,
+        openai_api_key: str | None = None,
         model: str = "gpt-4o",
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         temperature: float = 0.0,
     ):
         """Initialize RAGFactChecker.
@@ -43,7 +45,7 @@ class RAGFactChecker:
         self.logger = logging.getLogger(__name__)
         self._setup_components()
 
-    def _setup_components(self):
+    def _setup_components(self) -> None:
         """Initialize RAGFactChecker components."""
         try:
             from rag_fact_checker.data import Config
@@ -75,7 +77,7 @@ class RAGFactChecker:
 
     # ============ TRIPLET OPERATIONS ============
 
-    def generate_triplets(self, text: str) -> List[List[str]]:
+    def generate_triplets(self, text: str) -> list[list[str]]:
         """Generate triplets from text.
 
         :param text: Input text
@@ -88,8 +90,8 @@ class RAGFactChecker:
         return result.triplets
 
     def compare_triplets(
-        self, answer_triplets: List[List[str]], reference_triplets: List[List[str]]
-    ) -> Dict[str, Any]:
+        self, answer_triplets: list[list[str]], reference_triplets: list[list[str]]
+    ) -> dict[str, Any]:
         """Compare answer triplets against reference triplets.
 
         :param answer_triplets: Triplets from answer to check
@@ -103,7 +105,7 @@ class RAGFactChecker:
         )
         return {"fact_check_results": result.fact_check_prediction_binary, "raw_output": result}
 
-    def analyze_text_pair(self, answer_text: str, reference_text: str) -> Dict[str, Any]:
+    def analyze_text_pair(self, answer_text: str, reference_text: str) -> dict[str, Any]:
         """Generate and compare triplets for two texts.
 
         :param answer_text: Text to analyze
@@ -125,8 +127,8 @@ class RAGFactChecker:
     # ============ HALLUCINATION DETECTION ============
 
     def detect_hallucinations(
-        self, context: List[str], answer: str, question: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, context: list[str], answer: str, question: str | None = None
+    ) -> dict[str, Any]:
         """Detect hallucinations in answer given context.
 
         :param context: List of context documents
@@ -158,8 +160,8 @@ class RAGFactChecker:
     # ============ HALLUCINATION GENERATION ============
 
     def generate_hallucination_from_context(
-        self, context: List[str], question: str
-    ) -> Dict[str, Any]:
+        self, context: list[str], question: str
+    ) -> dict[str, Any]:
         """Generate hallucinated content from context and question.
 
         :param context: List of context documents
@@ -181,9 +183,9 @@ class RAGFactChecker:
         self,
         correct_answer: str,
         question: str,
-        error_types: Optional[List[str]] = None,
+        error_types: list[str] | None = None,
         intensity: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate hallucinated version of a correct answer.
 
         :param correct_answer: The correct answer to modify
@@ -223,11 +225,11 @@ class RAGFactChecker:
 
     async def generate_hallucination_from_answer_batch_async(
         self,
-        correct_answers: List[str],
-        questions: List[str],
-        error_types: Optional[List[List[str]]] = None,
-        intensities: Optional[List[float]] = None,
-    ) -> List[Dict[str, Any]]:
+        correct_answers: list[str],
+        questions: list[str],
+        error_types: list[list[str]] | None = None,
+        intensities: list[float] | None = None,
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated version of multiple correct answers."""
         error_type_enums_list = None
         if error_types:
@@ -253,9 +255,9 @@ class RAGFactChecker:
 
     async def generate_hallucination_from_context_batch_async(
         self,
-        contexts: List[List[str]],
-        questions: List[str],
-    ) -> List[Dict[str, Any]]:
+        contexts: list[list[str]],
+        questions: list[str],
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated version of multiple correct answers."""
         result = await self.reference_generator.generate_hlcntn_data_batch_async(
             contexts, questions
@@ -264,11 +266,11 @@ class RAGFactChecker:
 
     def generate_hallucination_from_answer_batch(
         self,
-        correct_answers: List[str],
-        questions: List[str],
-        error_types: Optional[List[List[str]]] = None,
-        intensities: Optional[List[float]] = None,
-    ) -> List[Dict[str, Any]]:
+        correct_answers: list[str],
+        questions: list[str],
+        error_types: list[list[str]] | None = None,
+        intensities: list[float] | None = None,
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated version of multiple correct answers.
 
         :param correct_answers: List of correct answers to modify
@@ -303,9 +305,9 @@ class RAGFactChecker:
 
     def generate_hallucination_from_context_batch(
         self,
-        contexts: List[List[str]],
-        questions: List[str],
-    ) -> List[Dict[str, Any]]:
+        contexts: list[list[str]],
+        questions: list[str],
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated version of multiple correct answers.
 
         :param contexts: List of context document lists
@@ -317,7 +319,7 @@ class RAGFactChecker:
         result = self.reference_generator.generate_hlcntn_data_batch(contexts, questions)
         return result
 
-    def generate_triplets_batch(self, texts: List[str]) -> List[List[List[str]]]:
+    def generate_triplets_batch(self, texts: list[str]) -> list[list[list[str]]]:
         """Generate triplets for multiple texts.
 
         :param texts: List of input texts
@@ -341,8 +343,8 @@ class RAGFactChecker:
         return results
 
     def detect_hallucinations_batch(
-        self, contexts: List[List[str]], answers: List[str], questions: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        self, contexts: list[list[str]], answers: list[str], questions: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """Detect hallucinations for multiple context-answer pairs.
 
         :param contexts: List of context document lists

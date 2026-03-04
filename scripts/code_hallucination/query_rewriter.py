@@ -125,12 +125,9 @@ def run(
 
                 if processed % 50 == 0:
                     print(f"  Progress: {processed}/{len(to_process)} (failed: {failed})")
-
-                time.sleep(0.5)  # Rate limiting
             except Exception as e:
                 print(f"  ERROR {instance_id}: {e}")
                 failed += 1
-                time.sleep(2)
 
     print(f"\nDone: {processed} new queries, {failed} failed")
     total = len(existing) + processed

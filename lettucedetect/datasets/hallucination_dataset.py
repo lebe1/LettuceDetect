@@ -8,6 +8,20 @@ from transformers import AutoTokenizer
 
 @dataclass
 class HallucinationSample:
+    """A single hallucination detection sample.
+
+    Attributes:
+        prompt: Context text (source documents, code files, documentation, user query).
+        answer: The LLM-generated answer to check for hallucinations.
+        labels: List of span annotations. Each dict has ``start``, ``end`` (character offsets
+            within ``answer``), and ``label`` keys. Empty list for clean samples.
+        split: Dataset split (``train``, ``dev``, or ``test``).
+        task_type: Task type (e.g. ``summarization``, ``qa``, ``code_generation``).
+        dataset: Source dataset (``ragtruth``, ``ragbench``, or ``swebench_code``).
+        language: Language code.
+
+    """
+
     prompt: str
     answer: str
     labels: list[dict]
@@ -17,6 +31,7 @@ class HallucinationSample:
     language: Literal["en", "de", "fr", "es", "it", "pl", "cn", "hu"]
 
     def to_json(self) -> dict:
+        """Serialize to a JSON-compatible dict."""
         return {
             "prompt": self.prompt,
             "answer": self.answer,
@@ -29,6 +44,7 @@ class HallucinationSample:
 
     @classmethod
     def from_json(cls, json_dict: dict) -> "HallucinationSample":
+        """Deserialize from a JSON dict."""
         return cls(
             prompt=json_dict["prompt"],
             answer=json_dict["answer"],
@@ -42,13 +58,22 @@ class HallucinationSample:
 
 @dataclass
 class HallucinationData:
+    """A collection of hallucination detection samples.
+
+    Attributes:
+        samples: List of :class:`HallucinationSample` instances.
+
+    """
+
     samples: list[HallucinationSample]
 
     def to_json(self) -> list[dict]:
+        """Serialize all samples to a JSON-compatible list."""
         return [sample.to_json() for sample in self.samples]
 
     @classmethod
     def from_json(cls, json_dict: list[dict]) -> "HallucinationData":
+        """Deserialize from a list of JSON dicts."""
         return cls(
             samples=[HallucinationSample.from_json(sample) for sample in json_dict],
         )
@@ -74,6 +99,7 @@ class HallucinationDataset(Dataset):
         self.max_length = max_length
 
     def __len__(self) -> int:
+        """Return the number of samples in the dataset."""
         return len(self.samples)
 
     @classmethod
@@ -84,8 +110,10 @@ class HallucinationDataset(Dataset):
         answer: str,
         max_length: int = 4096,
     ) -> tuple[dict[str, torch.Tensor], list[int], torch.Tensor, int]:
-        """Tokenizes the context and answer together, computes the answer start token index,
-        and initializes a labels list (using -100 for context tokens and 0 for answer tokens).
+        """Tokenize context and answer, compute answer start index, and initialize labels.
+
+        Computes the answer start token index and initializes a labels list
+        (using -100 for context tokens and 0 for answer tokens).
 
         :param tokenizer: The tokenizer to use.
         :param context: The context string.
@@ -109,19 +137,14 @@ class HallucinationDataset(Dataset):
 
         offsets = encoding.pop("offset_mapping")[0]  # shape: (seq_length, 2)
 
-        # Simple approach: encode just the context with special tokens
-        # For most tokenizers, the answer starts right after this
-        context_only = tokenizer(context, add_special_tokens=True, return_tensors="pt")
-        # The answer starts after the context sequence (with its special tokens)
-        answer_start_token = context_only["input_ids"].shape[1]
-
-        # Handle any edge cases where this might land on a special token
-        if (
-            answer_start_token < offsets.size(0)
-            and offsets[answer_start_token][0] == offsets[answer_start_token][1]
-        ):
-            # If we landed on a special token, move forward
-            answer_start_token += 1
+        # Compute answer_start_token from the answer side.  This is correct
+        # even when the context has been truncated by truncation="only_first",
+        # because the answer is never truncated in that mode.
+        # Layout: [CLS] context_tokens [SEP] answer_tokens [SEP]
+        answer_only = tokenizer(answer, add_special_tokens=False, return_tensors="pt")
+        answer_token_count = answer_only["input_ids"].shape[1]
+        total_seq_len = encoding["input_ids"].shape[1]
+        answer_start_token = total_seq_len - answer_token_count - 1  # -1 for trailing [SEP]
 
         # Initialize labels: -100 for tokens before the asnwer, 0 for tokens in the answer.
         labels = [-100] * encoding["input_ids"].shape[1]

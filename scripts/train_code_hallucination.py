@@ -6,13 +6,13 @@ Can optionally combine with RAGTruth data for mixed training.
 Usage:
     # Train on code hallucination data only
     python scripts/train_code_hallucination.py \
-        --code-data-path data/code_hallucination_lettucedetect_v2.json \
+        --code-data-path data/code_hallucination/code_hallucination_data.json \
         --model-name answerdotai/ModernBERT-base \
         --output-dir output/code_hallucination_detector
 
     # Train on both code + RAGTruth data
     python scripts/train_code_hallucination.py \
-        --code-data-path data/code_hallucination_lettucedetect_v2.json \
+        --code-data-path data/code_hallucination/code_hallucination_data.json \
         --ragtruth-path data/ragtruth/ragtruth_data.json \
         --model-name answerdotai/ModernBERT-base \
         --output-dir output/code_hallucination_detector
@@ -48,18 +48,13 @@ def set_seed(seed: int = 42):
 
 
 def load_code_data(path: str) -> list[HallucinationSample]:
-    """Load code hallucination dataset."""
+    """Load code hallucination dataset.
+
+    Uses the SWE-bench split field directly (train/dev/test).
+    """
     data = json.loads(Path(path).read_text())
     samples = []
     for item in data:
-        # Map non-standard dataset values to "ragtruth" for type compat
-        dataset = item.get("dataset", "ragtruth")
-        if dataset not in ("ragtruth", "ragbench"):
-            dataset = "ragtruth"
-        language = item.get("language", "en")
-        if language not in ("en", "de"):
-            language = "en"
-
         samples.append(
             HallucinationSample(
                 prompt=item["prompt"],
@@ -67,8 +62,8 @@ def load_code_data(path: str) -> list[HallucinationSample]:
                 labels=item["labels"],
                 split=item.get("split", "train"),
                 task_type=item.get("task_type", "code_generation"),
-                dataset=dataset,
-                language=language,
+                dataset="swebench_code",
+                language="en",
             )
         )
     return samples
@@ -91,7 +86,6 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=6)
     parser.add_argument("--learning-rate", type=float, default=1e-5)
     parser.add_argument("--max-length", type=int, default=4096)
-    parser.add_argument("--dev-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -108,11 +102,15 @@ def main():
     n_hall = sum(1 for s in code_samples if s.labels)
     print(f"  Total: {len(code_samples)} (clean: {n_clean}, hallucinated: {n_hall})")
 
-    # Split code data into train/dev
-    random.shuffle(code_samples)
-    dev_size = int(len(code_samples) * args.dev_ratio)
-    train_samples = code_samples[dev_size:]
-    dev_samples = code_samples[:dev_size]
+    # Use SWE-bench splits directly (zero repo overlap by design)
+    # Train on train, validate on dev, hold out test for final evaluation
+    train_samples = [s for s in code_samples if s.split == "train"]
+    dev_samples = [s for s in code_samples if s.split == "dev"]
+    test_samples = [s for s in code_samples if s.split == "test"]
+
+    print(f"  Train (SWE-bench train): {len(train_samples)}")
+    print(f"  Dev (SWE-bench dev): {len(dev_samples)}")
+    print(f"  Test (SWE-bench test, held out): {len(test_samples)}")
 
     # Optionally add RAGTruth data
     if args.ragtruth_path:

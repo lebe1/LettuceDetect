@@ -42,6 +42,7 @@ RETRY_DELAY = 2
 MAX_RETRIES = 3
 LLM_TEMPERATURE = 0.7
 HALLUCINATION_TEMPERATURE = 0.8
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1"))  # >1 for local vLLM
 
 # Hallucination types (round-robin assignment)
 HALLUCINATION_TYPES = ["structural", "behavioral", "semantic"]

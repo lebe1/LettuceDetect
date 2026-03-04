@@ -1,0 +1,95 @@
+site_name: LettuceDetect
+site_description: A lightweight hallucination detection framework for RAG applications
+site_url: https://krlabsorg.github.io/LettuceDetect
+repo_url: https://github.com/KRLabsOrg/LettuceDetect
+repo_name: KRLabsOrg/LettuceDetect
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 2
+            members_order: source
+            docstring_style: sphinx
+            merge_init_into_class: true
+            show_if_no_docstring: false
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Models: getting-started/models.md
+  - Guide:
+    - Detection Methods: guide/detection-methods.md
+    - Evaluation: guide/evaluation.md
+    - Training: guide/training.md
+    - Multilingual: guide/multilingual.md
+    - Web API: guide/api.md
+    - Integrations: guide/integrations.md
+  - Code Hallucination Dataset:
+    - Overview: code-hallucination/index.md
+    - Pipeline Phases: code-hallucination/phases.md
+    - Configuration: code-hallucination/configuration.md
+    - Architecture Research: code-hallucination/architecture-research.md
+  - Research:
+    - TinyLettuce: TINYLETTUCE.md
+    - Multilingual (EuroBERT): EUROBERT.md
+  - API Reference:
+    - Inference: api/inference.md
+    - Detectors: api/detectors.md
+    - Datasets: api/datasets.md
+    - Training: api/training.md
+  - Benchmarks: benchmarks.md

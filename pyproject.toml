@@ -29,6 +29,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/krlabsorg/lettucedetect"
+Documentation = "https://krlabsorg.github.io/LettuceDetect"
 
 [project.optional-dependencies]
 dev = [
@@ -42,11 +43,15 @@ api = [
     "pydantic-settings>=2.8.0",
     "httpx>=0.28"
 ]
+docs = [
+    "mkdocs-material>=9.0",
+    "mkdocstrings[python]>=0.24",
+]
 
 [tool.setuptools]
 packages = ["lettucedetect", "lettucedetect_api"]
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*_pytest.py"
 
@@ -80,5 +85,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "ANN001", "ANN201", "ANN202", "D103", "F841"]
 "lettucedetect_api/test_server.py" = ["S101"]
 "lettucedetect_api/test_client.py" = ["S101"]

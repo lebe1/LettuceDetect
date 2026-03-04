@@ -19,21 +19,33 @@ class BaseDetector(ABC):
         """Predict hallucination tokens or spans given passages and an answer.
 
         :param context: List of passages that were supplied to the LLM / user.
-        :param answer: Model‑generated answer to inspect.
+        :param answer: Model-generated answer to inspect.
         :param question: Original question (``None`` for summarisation).
-        :param output_format: ``"tokens"`` for token‑level dicts, ``"spans"`` for character spans.
+        :param output_format: ``"tokens"`` for token-level dicts, ``"spans"`` for character spans.
         :returns: List of predictions in requested format.
         """
         pass
 
     @abstractmethod
     def predict_prompt(self, prompt: str, answer: str, output_format: str = "tokens") -> list:
-        """Predict hallucinations when you already have a *single* full prompt string."""
+        """Predict hallucinations from a pre-built prompt string.
+
+        :param prompt: Full prompt (context + question already concatenated).
+        :param answer: Model-generated answer to inspect.
+        :param output_format: ``"tokens"`` or ``"spans"``.
+        :returns: List of predictions in requested format.
+        """
         pass
 
     @abstractmethod
     def predict_prompt_batch(
         self, prompts: list[str], answers: list[str], output_format: str = "tokens"
     ) -> list:
-        """Batch version of `predict_prompt`."""
+        """Batch version of :meth:`predict_prompt`.
+
+        :param prompts: List of full prompt strings.
+        :param answers: List of answers to inspect.
+        :param output_format: ``"tokens"`` or ``"spans"``.
+        :returns: List of prediction lists, one per input pair.
+        """
         pass

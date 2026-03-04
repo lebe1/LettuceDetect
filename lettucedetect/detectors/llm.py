@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +12,8 @@ from openai import OpenAI
 
 from lettucedetect.detectors.cache import CacheManager
 from lettucedetect.detectors.prompt_utils import LANG_TO_PASSAGE, Lang, PromptUtils
+
+logger = logging.getLogger(__name__)
 
 # JSON schema for structured response format
 HALLUCINATION_SCHEMA = {
@@ -72,7 +75,7 @@ class LLMDetector:
             )
         path = Path(fewshot_path)
         if not path.exists():
-            print(f"Warning: Few-shot examples file not found at {path}")
+            logger.warning("Few-shot examples file not found at %s", path)
         self.fewshot = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
         # Load hallucination detection template
@@ -90,9 +93,9 @@ class LLMDetector:
                 / "cache"
                 / f"cache_{model.replace(':', '_')}_{lang}.json"
             )
-            print(f"Using default cache file: {cache_file}")
+            logger.info("Using default cache file: %s", cache_file)
         else:
-            print(f"Using provided cache file: {cache_file}")
+            logger.info("Using provided cache file: %s", cache_file)
 
         self.cache = CacheManager(cache_file)
 
@@ -185,8 +188,8 @@ class LLMDetector:
             payload = json.loads(cached)
             return self._to_spans(payload["hallucination_list"], answer)
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"Error parsing LLM response: {e}")
-            print(f"Raw response: {cached}")
+            logger.error("Error parsing LLM response: %s", e)
+            logger.debug("Raw response: %s", cached)
             return []
 
     def predict(
@@ -199,7 +202,7 @@ class LLMDetector:
         """Predict hallucination spans from the provided context, answer, and question.
 
         :param context: List of passages that were supplied to the LLM / user.
-        :param answer: Model‑generated answer to inspect.
+        :param answer: Model-generated answer to inspect.
         :param question: Original question (``None`` for summarisation).
         :param output_format: ``"spans"`` for character spans.
         :returns: List of spans.

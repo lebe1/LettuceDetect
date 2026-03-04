@@ -1,6 +1,8 @@
 """Simple hallucination generation using RAGFactChecker."""
 
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 from lettucedetect.ragfactchecker import RAGFactChecker
 
@@ -14,9 +16,9 @@ class HallucinationGenerator:
     def __init__(
         self,
         method: str = "rag_fact_checker",
-        openai_api_key: str = None,
+        openai_api_key: str | None = None,
         model: str = "gpt-4o",
-        base_url: str = None,
+        base_url: str | None = None,
         temperature: float = 0.0,
         **kwargs,
     ):
@@ -36,12 +38,12 @@ class HallucinationGenerator:
 
     def generate(
         self,
-        context: List[str],
+        context: list[str],
         question: str,
-        answer: str = None,
-        error_types: Optional[List[str]] = None,
+        answer: str | None = None,
+        error_types: list[str] | None = None,
         intensity: float = 0.3,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate hallucinated content.
 
         :param context: List of context documents
@@ -65,12 +67,12 @@ class HallucinationGenerator:
 
     def generate_batch(
         self,
-        contexts: List[List[str]],
-        questions: List[str],
-        answers: List[str] = None,
-        error_types: Optional[List[str]] = None,
+        contexts: list[list[str]],
+        questions: list[str],
+        answers: list[str] | None = None,
+        error_types: list[str] | None = None,
         intensity: float = 0.3,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated content for multiple inputs.
 
         :param contexts: List of context lists
@@ -96,12 +98,12 @@ class HallucinationGenerator:
 
     async def generate_batch_async(
         self,
-        contexts: List[List[str]],
-        questions: List[str],
-        answers: List[str] = None,
-        error_types: Optional[List[str]] = None,
+        contexts: list[list[str]],
+        questions: list[str],
+        answers: list[str] | None = None,
+        error_types: list[str] | None = None,
         intensity: float = 0.3,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Generate hallucinated content for multiple inputs.
 
         :param contexts: List of context lists
