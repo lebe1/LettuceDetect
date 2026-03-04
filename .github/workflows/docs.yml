@@ -26,7 +26,6 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install mkdocs-material "mkdocstrings[python]>=0.24"
-      - run: pip install -e .
       - run: mkdocs build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,0 +1,17 @@
+/* KR Labs brand colors — aligned with krlabs.eu (#ff5757) */
+
+:root {
+  --md-primary-fg-color: #ff5757;
+  --md-primary-fg-color--light: #ff7a7a;
+  --md-primary-fg-color--dark: #e04040;
+  --md-accent-fg-color: #ff5757;
+  --md-accent-fg-color--transparent: rgba(255, 87, 87, 0.1);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #ff5757;
+  --md-primary-fg-color--light: #ff7a7a;
+  --md-primary-fg-color--dark: #e04040;
+  --md-accent-fg-color: #ff5757;
+  --md-accent-fg-color--transparent: rgba(255, 87, 87, 0.1);
+}

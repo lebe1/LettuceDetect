@@ -6,21 +6,26 @@ repo_name: KRLabsOrg/LettuceDetect
 
 theme:
   name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: green
-      accent: light green
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: green
-      accent: light green
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
   features:
     - navigation.sections
     - navigation.expand
@@ -30,6 +35,9 @@ theme:
     - toc.follow
   icon:
     repo: fontawesome/brands/github
+
+extra_css:
+  - assets/extra.css
 
 markdown_extensions:
   - admonition
