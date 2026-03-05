@@ -180,61 +180,84 @@ def run(
     if queries is None:
         queries = {}
 
+    # Load existing for resumability
+    existing = {}
+    if FORMATS_PATH.exists():
+        with open(FORMATS_PATH) as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    existing[entry["instance_id"]] = entry
+                except (json.JSONDecodeError, KeyError):
+                    continue
+    print(f"Already processed: {len(existing)} formats")
+
+    to_process = [inst for inst in instances if inst["instance_id"] not in existing]
+    print(f"Remaining: {len(to_process)} instances to process")
+
     # Only init LLM client if we'll need it (lazy)
     client = None
 
-    results = []
+    results = list(existing.values())
     format_counts = {fmt: 0 for fmt in FORMAT_TYPES}
+    for entry in results:
+        fmt = entry.get("format_type")
+        if fmt in format_counts:
+            format_counts[fmt] += 1
     skipped = 0
     explanation_failures = 0
+    processed = 0
 
-    for inst in instances:
-        instance_id = inst["instance_id"]
+    with open(FORMATS_PATH, "a") as f:
+        for inst in to_process:
+            instance_id = inst["instance_id"]
 
-        # Load source data from cache
-        cache_path = source_cache_dir / f"{instance_id}.json"
-        if not cache_path.exists():
-            skipped += 1
-            continue
+            # Load source data from cache
+            cache_path = source_cache_dir / f"{instance_id}.json"
+            if not cache_path.exists():
+                skipped += 1
+                continue
 
-        with open(cache_path) as f:
-            source_data = json.load(f)
+            with open(cache_path) as fp:
+                source_data = json.load(fp)
 
-        fmt, answer = assign_format(source_data)
-        if fmt is None:
-            skipped += 1
-            continue
+            fmt, answer = assign_format(source_data)
+            if fmt is None:
+                skipped += 1
+                continue
 
-        # Generate explanation wrapper for code_with_explanation format
-        if fmt == "code_with_explanation":
-            if client is None:
-                client = OpenAI(api_key=api_key, base_url=base_url)
-                print(f"  LLM client initialized for code_with_explanation ({base_url})")
+            # Generate explanation wrapper for code_with_explanation format
+            if fmt == "code_with_explanation":
+                if client is None:
+                    client = OpenAI(api_key=api_key, base_url=base_url)
+                    print(f"  LLM client initialized for code_with_explanation ({base_url})")
 
-            query = queries.get(instance_id, inst.get("problem_statement", "")[:500])
-            context = source_data.get("patch_code", "")
-            explained = _generate_explanation(client, model, answer, query, context)
+                query = queries.get(instance_id, inst.get("problem_statement", "")[:500])
+                context = source_data.get("patch_code", "")
+                explained = _generate_explanation(client, model, answer, query, context)
 
-            if explained is None:
-                # Fallback: use raw code as fragment
-                fmt = "fragment"
-                explanation_failures += 1
-            else:
-                answer = explained
+                if explained is None:
+                    # Fallback: use raw code as fragment
+                    fmt = "fragment"
+                    explanation_failures += 1
+                else:
+                    answer = explained
 
-        results.append(
-            {
+            entry = {
                 "instance_id": instance_id,
                 "format_type": fmt,
                 "answer": answer,
             }
-        )
-        format_counts[fmt] += 1
-
-    # Save
-    with open(FORMATS_PATH, "w") as f:
-        for entry in results:
             f.write(json.dumps(entry) + "\n")
+            f.flush()
+            results.append(entry)
+            format_counts[fmt] += 1
+            processed += 1
+
+            if processed % 100 == 0:
+                print(
+                    f"  Progress: {processed}/{len(to_process)} (failures: {explanation_failures})"
+                )
 
     print(f"\nAssigned formats for {len(results)} instances (skipped {skipped})")
     if explanation_failures:
