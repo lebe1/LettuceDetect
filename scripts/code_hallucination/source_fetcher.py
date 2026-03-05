@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import tempfile
+import warnings
 from pathlib import Path
 
 import requests
@@ -143,7 +144,9 @@ def extract_modified_functions(original_source: str, patched_source: str) -> lis
     def get_functions(source: str) -> dict[str, str]:
         """Parse source and extract function name -> source mapping."""
         try:
-            tree = ast.parse(source)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SyntaxWarning)
+                tree = ast.parse(source)
         except SyntaxError:
             return {}
 
@@ -460,10 +463,7 @@ def fetch_source_for_instance(
     for filepath in changed_files:
         if filepath not in source_files:
             continue
-        if repo_dir is not None:
-            patched_source = apply_patch_and_get_file(repo_dir, commit, patch, filepath)
-        else:
-            patched_source = apply_patch_in_memory(source_files[filepath], patch, filepath)
+        patched_source = apply_patch_in_memory(source_files[filepath], patch, filepath)
         if patched_source:
             funcs = extract_modified_functions(source_files[filepath], patched_source)
             for func in funcs:
@@ -491,6 +491,9 @@ def run(instances: list[dict], use_github_api: bool = False):
     print("=" * 60)
     print("Phase 2: Source File Fetching")
     print("=" * 60)
+
+    # Suppress SyntaxWarning from ast.parse on third-party source files
+    warnings.filterwarnings("ignore", category=SyntaxWarning)
 
     SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     REPOS_DIR.mkdir(parents=True, exist_ok=True)
