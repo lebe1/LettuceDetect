@@ -421,8 +421,8 @@ def _run_sequential(to_process, formats, queries, docs, api_key, base_url, model
             results.append(entry)
             processed += 1
 
-            if processed % 50 == 0:
-                print(f"  Progress: {processed}/{len(to_process)} (failed: {failed})")
+            if processed % 100 == 0:
+                print(f"  Phase 6: {processed}/{len(to_process)} (failed: {failed})")
 
     print(f"\nDone: {processed} injected, {failed} failed ({no_spans} had no matchable spans)")
     return results
@@ -497,11 +497,9 @@ def _run_batched(to_process, formats, queries, docs, api_key, base_url, model):
                     results.append(entry)
                     processed += 1
 
-                if processed % 50 == 0 or batch_start + BATCH_SIZE >= len(to_process):
+                if processed % 100 == 0 or batch_start + BATCH_SIZE >= len(to_process):
                     total = processed + failed
-                    print(
-                        f"  Progress: {total}/{len(to_process)} ({processed} ok, {failed} failed)"
-                    )
+                    print(f"  Phase 6: {total}/{len(to_process)} ({processed} ok, {failed} failed)")
 
     asyncio.run(process_batches())
     print(f"\nDone: {processed} injected, {failed} failed ({no_spans} had no matchable spans)")

@@ -228,7 +228,7 @@ def run(instances: list[dict]):
 
             if processed % 100 == 0:
                 print(
-                    f"  Progress: {processed}/{len(to_process)} ({with_docs} with docs, {skipped_by_ratio} skipped)"
+                    f"  Phase 4: {processed}/{len(to_process)} ({with_docs} with docs, {skipped_by_ratio} skipped)"
                 )
 
     print(

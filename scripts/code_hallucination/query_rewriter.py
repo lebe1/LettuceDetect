@@ -123,8 +123,8 @@ def run(
                 f.flush()
                 processed += 1
 
-                if processed % 50 == 0:
-                    print(f"  Progress: {processed}/{len(to_process)} (failed: {failed})")
+                if processed % 100 == 0:
+                    print(f"  Phase 3: {processed}/{len(to_process)} (failed: {failed})")
             except Exception as e:
                 print(f"  ERROR {instance_id}: {e}")
                 failed += 1

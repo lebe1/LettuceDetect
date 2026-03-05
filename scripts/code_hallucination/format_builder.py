@@ -256,7 +256,7 @@ def run(
 
             if processed % 100 == 0:
                 print(
-                    f"  Progress: {processed}/{len(to_process)} (failures: {explanation_failures})"
+                    f"  Phase 5: {processed}/{len(to_process)} (failures: {explanation_failures})"
                 )
 
     print(f"\nAssigned formats for {len(results)} instances (skipped {skipped})")

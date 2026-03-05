@@ -509,8 +509,8 @@ def run(instances: list[dict], use_github_api: bool = False):
     failed = 0
 
     for i, instance in enumerate(instances):
-        if (i + 1) % 100 == 0:
-            print(f"  Progress: {i + 1}/{len(instances)} ({len(results)} success, {failed} failed)")
+        if (i + 1) % 100 == 0 or (i + 1) == len(instances):
+            print(f"  Phase 2: {i + 1}/{len(instances)} ({len(results)} success, {failed} failed)")
 
         # Skip if already cached
         cache_path = SOURCE_CACHE_DIR / f"{instance['instance_id']}.json"
