@@ -184,6 +184,93 @@ def extract_modified_functions(original_source: str, patched_source: str) -> lis
     return modified
 
 
+def apply_patch_in_memory(original_source: str, patch: str, filepath: str) -> str | None:
+    """Apply a unified diff patch to source code in memory, without git.
+
+    Parses the unified diff to extract hunks for the target file,
+    then applies them line-by-line to produce the patched source.
+
+    :param original_source: The original file content.
+    :param patch: The full unified diff (may contain multiple files).
+    :param filepath: The specific file to extract and apply hunks for.
+    :return: Patched source string, or None if application fails.
+    """
+    # Split patch into per-file sections
+    file_patch_lines = []
+    in_target_file = False
+
+    for line in patch.split("\n"):
+        if line.startswith("diff --git"):
+            match = re.match(r"diff --git a/(.+?) b/(.+)$", line)
+            in_target_file = match is not None and match.group(2) == filepath
+            continue
+        if in_target_file:
+            file_patch_lines.append(line)
+
+    if not file_patch_lines:
+        return None
+
+    # Parse hunks from the file-specific patch lines
+    hunks = []
+    current_hunk = None
+
+    for line in file_patch_lines:
+        if line.startswith("@@"):
+            # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+            hunk_match = re.match(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+            if hunk_match:
+                current_hunk = {
+                    "old_start": int(hunk_match.group(1)),
+                    "lines": [],
+                }
+                hunks.append(current_hunk)
+        elif line.startswith("---") or line.startswith("+++"):
+            continue
+        elif current_hunk is not None:
+            current_hunk["lines"].append(line)
+
+    if not hunks:
+        return None
+
+    # Apply hunks to original source
+    original_lines = original_source.split("\n")
+    result_lines = []
+    orig_idx = 0  # 0-based index into original_lines
+
+    try:
+        for hunk in hunks:
+            hunk_start = hunk["old_start"] - 1  # Convert to 0-based
+
+            # Copy unchanged lines before this hunk
+            while orig_idx < hunk_start and orig_idx < len(original_lines):
+                result_lines.append(original_lines[orig_idx])
+                orig_idx += 1
+
+            # Apply hunk lines
+            for line in hunk["lines"]:
+                if line.startswith("+"):
+                    result_lines.append(line[1:])
+                elif line.startswith("-"):
+                    orig_idx += 1  # Skip the removed line
+                elif line.startswith(" "):
+                    result_lines.append(line[1:])
+                    orig_idx += 1
+                elif line == "":
+                    # Empty line in diff context — treat as context
+                    if orig_idx < len(original_lines):
+                        result_lines.append(original_lines[orig_idx])
+                        orig_idx += 1
+
+        # Copy remaining lines after last hunk
+        while orig_idx < len(original_lines):
+            result_lines.append(original_lines[orig_idx])
+            orig_idx += 1
+
+        return "\n".join(result_lines)
+    except (IndexError, ValueError):
+        return None
+
+
 def extract_code_from_patch(patch: str) -> str:
     """Extract added/changed lines from a unified diff as code fragment.
 
@@ -368,17 +455,20 @@ def fetch_source_for_instance(
     # Edit-style format
     edit_style = build_edit_style_answer(patch, changed_files)
 
-    # Complete function format (needs patched source via git apply)
+    # Complete function format — extract modified functions
     modified_functions = []
-    if repo_dir is not None:
-        for filepath in changed_files:
-            if filepath in source_files:
-                patched_source = apply_patch_and_get_file(repo_dir, commit, patch, filepath)
-                if patched_source:
-                    funcs = extract_modified_functions(source_files[filepath], patched_source)
-                    for func in funcs:
-                        func["file"] = filepath
-                    modified_functions.extend(funcs)
+    for filepath in changed_files:
+        if filepath not in source_files:
+            continue
+        if repo_dir is not None:
+            patched_source = apply_patch_and_get_file(repo_dir, commit, patch, filepath)
+        else:
+            patched_source = apply_patch_in_memory(source_files[filepath], patch, filepath)
+        if patched_source:
+            funcs = extract_modified_functions(source_files[filepath], patched_source)
+            for func in funcs:
+                func["file"] = filepath
+            modified_functions.extend(funcs)
 
     return {
         "instance_id": instance["instance_id"],

@@ -30,7 +30,7 @@ MODEL = os.environ.get("MODEL", "moonshotai/kimi-k2-instruct-0905")
 # Context7
 CONTEXT7_BASE = "https://context7.com/api/v2"
 CONTEXT7_API_KEY = os.environ.get("CONTEXT7_API_KEY", "")
-DOCS_RATIO = 0.5  # Only fetch docs for 50% of instances
+DOCS_RATIO = 0.2  # Only fetch docs for 20% of instances
 
 # === Dataset Config ===
 HALLUCINATION_RATIO = 0.4  # 40% hallucinated, 60% clean
@@ -48,8 +48,8 @@ BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1"))  # >1 for local vLLM
 HALLUCINATION_TYPES = ["structural", "behavioral", "semantic"]
 
 # Answer format types
-FORMAT_TYPES = ["complete_function", "edit_style", "fragment"]
-FORMAT_WEIGHTS = [0.4, 0.3, 0.3]  # Target distribution
+FORMAT_TYPES = ["complete_function", "edit_style", "fragment", "code_with_explanation"]
+FORMAT_WEIGHTS = [0.25, 0.15, 0.20, 0.40]  # Target distribution
 
 # SWE-bench datasets
 SWEBENCH_FULL = "princeton-nlp/SWE-bench"

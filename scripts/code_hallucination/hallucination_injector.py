@@ -27,7 +27,8 @@ from .config import (
 INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     You are a code hallucination injector for building a hallucination detection dataset.
 
-    Given correct code and context, create a hallucinated version with a specific type of error.
+    Given a correct answer (which may be pure code OR code with natural language explanation)
+    and context, create a hallucinated version with specific types of errors.
 
     Hallucination types:
     - STRUCTURAL: Change a function call, import, or parameter to something that
@@ -37,20 +38,34 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
       off-by-one errors, swapped conditions, wrong argument values.
     - SEMANTIC: Code that looks like it addresses the user's request but does
       something subtly different or opposite. The code parses, uses real APIs,
-      but fails to do what was asked.
+      but fails to do what was asked. If library documentation is provided,
+      you can make the code contradict the documented API (wrong parameter names,
+      wrong return types, deprecated usage, etc.).
+      For answers with explanations, you may also make the explanation contradict
+      the code or describe incorrect behavior.
 
     Rules:
-    - Make changes PLAUSIBLE - something an LLM would realistically generate
+    - Make 2-3 DISTINCT changes spread across different parts of the answer
+    - Each changed span must be 20-150 characters long (not too short, not too long)
+    - Total hallucinated text must be LESS THAN 40% of the original answer length
+    - Keep most of the answer CORRECT — do NOT rewrite the entire thing
+    - Changes should be in different functions/blocks/paragraphs, not adjacent lines
+    - Make changes PLAUSIBLE — something an LLM would realistically generate
     - Changes must be SUBTLE, not obviously broken
-    - The hallucinated code must still be syntactically valid
-    - Make 1-3 changes, not more
+    - The code in the hallucinated answer must still be syntactically valid
+    - Do NOT add comments explaining or hinting at the hallucination (no "# wrong",
+      "# error", "# typo", "# nonexistent", etc.) — the errors must be invisible
+      to someone skimming the answer
+    - If the answer contains both code and explanation, inject errors in BOTH parts
+      (e.g. wrong API in code + misleading description in text)
+    - Preserve the overall structure: keep markdown formatting, code blocks, etc.
 
     Respond in this exact JSON format (no markdown, no code blocks):
     {
-        "hallucinated_code": "the full modified code with hallucinations injected",
+        "hallucinated_code": "the full modified answer with hallucinations injected",
         "changes": [
             {
-                "original": "exact original code that was changed",
+                "original": "exact original text that was changed",
                 "hallucinated": "what you changed it to",
                 "explanation": "why this is a hallucination"
             }
@@ -58,8 +73,10 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     }
 
     IMPORTANT:
-    - "original" must be an exact substring of the correct code
-    - "hallucinated" must be an exact substring of your hallucinated_code
+    - You MUST include 2-3 changes in the "changes" array
+    - "original" must be an exact substring of the correct answer
+    - "hallucinated" must be an exact substring of your hallucinated answer
+    - Each "hallucinated" value must be at least 20 characters long
     - Return ONLY valid JSON, nothing else
 """)
 
@@ -71,17 +88,26 @@ def inject_hallucination(
     hall_type: str,
     user_query: str = "",
     context: str = "",
+    documentation: dict[str, str] | None = None,
 ) -> dict | None:
     """Inject a hallucination and get back structured JSON with spans.
 
     Returns dict with 'hallucinated_code' and 'changes', or None if failed.
     """
+    docs_section = ""
+    if documentation:
+        docs_parts = [f"Documentation for {lib}:\n{doc}" for lib, doc in documentation.items()]
+        docs_section = (
+            "\n\nLibrary documentation (the hallucination could contradict this):\n"
+            + "\n\n".join(docs_parts)
+        )
+
     user_msg = f"""Hallucination type to inject: {hall_type.upper()}
 
-User's original request: {user_query[:500]}
+User's original request: {user_query}
 
 Context (source code):
-{context[:2000]}
+{context}{docs_section}
 
 Correct code to modify:
 {clean_answer}
@@ -151,7 +177,7 @@ def build_labels_from_changes(
     labels = []
     for change in changes:
         h_span = change.get("hallucinated", "")
-        if not h_span or len(h_span) < 3:
+        if not h_span or len(h_span) < 15:
             continue
         if h_span not in hallucinated_code:
             continue
@@ -190,14 +216,23 @@ async def _inject_one_async(
     hall_type: str,
     user_query: str,
     context: str,
+    documentation: dict[str, str] | None = None,
 ) -> dict | None:
     """Async version of inject_hallucination for batch processing."""
+    docs_section = ""
+    if documentation:
+        docs_parts = [f"Documentation for {lib}:\n{doc}" for lib, doc in documentation.items()]
+        docs_section = (
+            "\n\nLibrary documentation (the hallucination could contradict this):\n"
+            + "\n\n".join(docs_parts)
+        )
+
     user_msg = f"""Hallucination type to inject: {hall_type.upper()}
 
-User's original request: {user_query[:500]}
+User's original request: {user_query}
 
 Context (source code):
-{context[:2000]}
+{context}{docs_section}
 
 Correct code to modify:
 {clean_answer}
@@ -233,6 +268,29 @@ Generate a hallucinated version with {hall_type} error(s). Return JSON only."""
     return None
 
 
+def _validate_labels(hallucinated_code: str, labels: list[dict]) -> tuple[bool, str]:
+    """Validate that hallucination labels meet quality thresholds.
+
+    :return: (is_valid, reason) tuple.
+    """
+    if not labels:
+        return False, "no_labels"
+
+    total_span = sum(lab["end"] - lab["start"] for lab in labels)
+    code_len = len(hallucinated_code) if hallucinated_code else 1
+    coverage = total_span / code_len
+
+    if coverage > 0.60:
+        return False, f"coverage_too_high ({coverage:.0%})"
+
+    for lab in labels:
+        span_len = lab["end"] - lab["start"]
+        if span_len < 15:
+            return False, f"span_too_short ({span_len} chars)"
+
+    return True, ""
+
+
 def _process_result(result, instance_id, hall_type, fmt_data, model):
     """Process a single injection result into a JSONL entry."""
     if result is None:
@@ -240,8 +298,11 @@ def _process_result(result, instance_id, hall_type, fmt_data, model):
     hallucinated_code = result["hallucinated_code"]
     changes = result.get("changes", [])
     labels = build_labels_from_changes(hallucinated_code, changes, hall_type)
-    if not labels:
+
+    valid, reason = _validate_labels(hallucinated_code, labels)
+    if not valid:
         return None
+
     return {
         "instance_id": instance_id,
         "hallucinated_answer": hallucinated_code,
@@ -256,6 +317,7 @@ def run(
     instances_to_inject: list[dict],
     formats: dict[str, dict],
     queries: dict[str, str],
+    docs: dict[str, dict] | None = None,
     api_key: str = API_KEY,
     base_url: str = API_BASE_URL,
     model: str = MODEL,
@@ -268,6 +330,9 @@ def run(
     print("=" * 60)
     print("Phase 6: Hallucination Injection")
     print("=" * 60)
+
+    if docs is None:
+        docs = {}
 
     HALLUCINATED_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -285,9 +350,9 @@ def run(
     print(f"Remaining: {len(to_process)} instances to inject")
 
     if BATCH_SIZE > 1:
-        results = _run_batched(to_process, formats, queries, api_key, base_url, model)
+        results = _run_batched(to_process, formats, queries, docs, api_key, base_url, model)
     else:
-        results = _run_sequential(to_process, formats, queries, api_key, base_url, model)
+        results = _run_sequential(to_process, formats, queries, docs, api_key, base_url, model)
 
     # Stats
     type_counts = {}
@@ -307,7 +372,7 @@ def run(
     return results
 
 
-def _run_sequential(to_process, formats, queries, api_key, base_url, model):
+def _run_sequential(to_process, formats, queries, docs, api_key, base_url, model):
     """Sequential processing for remote APIs (rate-limited)."""
     client = OpenAI(api_key=api_key, base_url=base_url)
     processed = 0
@@ -326,10 +391,24 @@ def _run_sequential(to_process, formats, queries, api_key, base_url, model):
 
             hall_type = HALLUCINATION_TYPES[i % len(HALLUCINATION_TYPES)]
             query = queries.get(instance_id, "")
-            context = inst.get("problem_statement", "")[:2000]
+            context = inst.get("problem_statement", "")
+            instance_docs = docs.get(instance_id, {})
 
-            result = inject_hallucination(client, model, clean_answer, hall_type, query, context)
-            entry = _process_result(result, instance_id, hall_type, fmt_data, model)
+            # Try injection with up to 2 quality retries
+            entry = None
+            for attempt in range(3):
+                result = inject_hallucination(
+                    client,
+                    model,
+                    clean_answer,
+                    hall_type,
+                    query,
+                    context,
+                    documentation=instance_docs,
+                )
+                entry = _process_result(result, instance_id, hall_type, fmt_data, model)
+                if entry is not None:
+                    break
 
             if entry is None:
                 if result is not None:
@@ -349,7 +428,7 @@ def _run_sequential(to_process, formats, queries, api_key, base_url, model):
     return results
 
 
-def _run_batched(to_process, formats, queries, api_key, base_url, model):
+def _run_batched(to_process, formats, queries, docs, api_key, base_url, model):
     """Async batch processing for local vLLM (no rate limiting needed)."""
     aclient = AsyncOpenAI(api_key=api_key, base_url=base_url)
     processed = 0
@@ -378,10 +457,19 @@ def _run_batched(to_process, formats, queries, api_key, base_url, model):
 
                     hall_type = HALLUCINATION_TYPES[global_idx % len(HALLUCINATION_TYPES)]
                     query = queries.get(instance_id, "")
-                    context = inst.get("problem_statement", "")[:2000]
+                    context = inst.get("problem_statement", "")
+                    instance_docs = docs.get(instance_id, {})
 
                     tasks.append(
-                        _inject_one_async(aclient, model, clean_answer, hall_type, query, context)
+                        _inject_one_async(
+                            aclient,
+                            model,
+                            clean_answer,
+                            hall_type,
+                            query,
+                            context,
+                            documentation=instance_docs,
+                        )
                     )
                     batch_meta.append((instance_id, hall_type, fmt_data))
 

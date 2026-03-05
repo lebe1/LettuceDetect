@@ -17,7 +17,7 @@ This pipeline generates samples where an LLM coding assistant answers a develope
 | **Repos** | 53 unique repos, zero overlap between splits |
 | **Clean/hallucinated ratio** | ~60% clean / ~40% hallucinated |
 | **Hallucination types** | Structural, behavioral, semantic |
-| **Answer formats** | Complete function, edit-style, code fragment |
+| **Answer formats** | Code with explanation, complete function, fragment, edit-style |
 | **Annotation granularity** | Character-level spans |
 
 ## Quick Start
@@ -127,7 +127,7 @@ Each sample follows the `HallucinationSample` format used by LettuceDetect:
 ```
 
 - **`prompt`**: Source code files + documentation + user query
-- **`answer`**: Code in one of three formats (complete function, edit-style, fragment)
+- **`answer`**: Code in one of four formats (code with explanation, complete function, fragment, edit-style)
 - **`labels`**: Character-level span annotations (empty for clean samples)
 - **`split`**: train/dev/test (inherited from SWE-bench, zero repo overlap)
 
@@ -137,8 +137,8 @@ The pipeline works with any OpenAI-compatible API. Tested with:
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| [Groq](https://groq.com) | `moonshotai/kimi-k2-instruct-0905` | Fast, free tier |
-| [Groq](https://groq.com) | `llama-3.3-70b-versatile` | Good quality |
+| [Groq](https://groq.com) | `openai/gpt-oss-120b` | Best quality, recommended |
+| [Groq](https://groq.com) | `moonshotai/kimi-k2-instruct-0905` | Fast |
 | [Novita AI](https://novita.ai) | `qwen/qwen3.5-27b` | Good for bulk generation |
 | Local (vLLM/Ollama) | Any model | Free, best for large runs |
 
@@ -183,10 +183,10 @@ data/code_hallucination/
 Each SWE-bench instance produces exactly one sample — either clean (gold patch answer) or hallucinated (LLM-injected). No instance appears in both classes. This avoids the artificial pairing problem where models learn to distinguish the specific instance rather than the hallucination.
 
 ### JSON-based span annotations
-Hallucination spans are extracted from the LLM's structured JSON response, not from difflib character-level diffs. The LLM returns `{"hallucinated_code": "...", "changes": [{"original": "...", "hallucinated": "..."}]}` and spans are found by string matching. This produces clean, meaningful spans (avg 70 chars) instead of noisy character-level artifacts (1-3 char noise from difflib).
+Hallucination spans are extracted from the LLM's structured JSON response, not from difflib character-level diffs. The LLM returns `{"hallucinated_code": "...", "changes": [{"original": "...", "hallucinated": "..."}]}` and spans are found by string matching. Quality controls enforce 2-3 spans per sample (avg 2.8), minimum 15 chars per span, and total coverage under 60%.
 
-### 50/50 documentation split
-Half of instances include Context7 library documentation, half don't. This teaches models to handle both documented and undocumented scenarios.
+### 20% documentation split
+A subset of instances (20%) include Context7 library documentation, filtered to only the repo's primary library. Documentation is also passed to the hallucination injector, enabling semantic hallucinations that contradict documented API behavior.
 
 ### Zero repo overlap between splits
 SWE-bench's train/dev/test splits naturally have zero repository overlap across 53 unique repos. This means test performance measures generalization to completely unseen codebases.

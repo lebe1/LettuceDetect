@@ -19,7 +19,7 @@ These can also be overridden via CLI flags (`--api-key`, `--base-url`, `--model`
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `HALLUCINATION_RATIO` | `0.4` | Fraction of instances that get hallucination injection |
-| `DOCS_RATIO` | `0.5` | Fraction of instances that get Context7 documentation |
+| `DOCS_RATIO` | `0.2` | Fraction of instances that get Context7 documentation |
 | `MAX_FILE_CHARS` | `12000` | Maximum characters per source file |
 | `MAX_CONTEXT7_CHARS` | `4000` | Maximum characters per library doc |
 | `LLM_TEMPERATURE` | `0.7` | Temperature for query rewriting |
@@ -31,9 +31,10 @@ These can also be overridden via CLI flags (`--api-key`, `--base-url`, `--model`
 
 | Format | Weight | Description |
 |--------|--------|-------------|
-| `complete_function` | 0.4 | Full patched function body via AST |
-| `edit_style` | 0.3 | "In file X, replace Y with Z" |
-| `fragment` | 0.3 | Added/changed lines from diff |
+| `code_with_explanation` | 0.40 | Natural AI assistant response with prose + code block (LLM-generated) |
+| `complete_function` | 0.25 | Full patched function body via AST |
+| `fragment` | 0.20 | Added/changed lines from diff |
+| `edit_style` | 0.15 | "In file X, replace Y with Z" |
 
 ## Hallucination Types
 

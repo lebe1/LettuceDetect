@@ -93,10 +93,11 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
 
     run_docs(selected)
 
-    # Phase 5: Assign formats
+    # Phase 5: Assign formats (needs LLM for code_with_explanation)
     from .format_builder import run as run_formats
 
-    run_formats(selected)
+    queries_dict = load_jsonl_dict(QUERIES_PATH, value_key="query")
+    run_formats(selected, api_key=api_key, base_url=base_url, model=model, queries=queries_dict)
 
     # Phase 8: Select targets (before phase 6)
     from .splitter import select_hallucination_targets
@@ -107,16 +108,17 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
     from .hallucination_injector import run as run_inject
 
     formats = load_jsonl_dict(FORMATS_PATH)
-    queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
+    docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
     to_inject = [i for i in selected if i["instance_id"] in targets]
-    run_inject(to_inject, formats, queries, api_key=api_key, base_url=base_url, model=model)
+    run_inject(
+        to_inject, formats, queries_dict, docs=docs, api_key=api_key, base_url=base_url, model=model
+    )
 
     # Phase 7: Assemble
     from .sample_assembler import run as run_assemble
 
-    docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
     hallucinations = load_jsonl_dict(HALLUCINATED_PATH)
-    samples, metadata = run_assemble(selected, queries, docs, formats, hallucinations, targets)
+    samples, metadata = run_assemble(selected, queries_dict, docs, formats, hallucinations, targets)
 
     # Phase 9: Validate
     from .validator import run as run_validate
@@ -189,7 +191,14 @@ def main():
             from .format_builder import run
             from .swebench_loader import load_instances
 
-            run(load_instances())
+            queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
+            run(
+                load_instances(),
+                api_key=args.api_key,
+                base_url=args.base_url,
+                model=args.model,
+                queries=queries,
+            )
         elif phase == 6:
             from .hallucination_injector import run
             from .splitter import select_hallucination_targets
@@ -198,12 +207,14 @@ def main():
             instances = load_instances()
             formats = load_jsonl_dict(FORMATS_PATH)
             queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
+            docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
             targets = select_hallucination_targets(instances)
             to_inject = [i for i in instances if i["instance_id"] in targets]
             run(
                 to_inject,
                 formats,
                 queries,
+                docs=docs,
                 api_key=args.api_key,
                 base_url=args.base_url,
                 model=args.model,

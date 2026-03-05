@@ -106,21 +106,39 @@ def fetch_context7_docs(
         return None
 
 
+def repo_to_library(repo: str) -> str | None:
+    """Map a GitHub repo name to its primary library name for Context7.
+
+    :param repo: GitHub repo path like 'django/django' or 'scikit-learn/scikit-learn'.
+    :return: Library name string, or None if unknown.
+    """
+    repo_lower = repo.lower()
+    for key, lib in PATH_TO_LIB.items():
+        if key in repo_lower:
+            return lib
+    return None
+
+
 def get_documentation_for_instance(
-    changed_files: list[str], patch: str, problem_statement: str
+    changed_files: list[str], patch: str, problem_statement: str, repo: str = ""
 ) -> dict[str, str]:
-    """Fetch documentation for libraries referenced in an instance."""
-    imported_libs = extract_imports_from_patch(patch)
-    path_libs = extract_libraries_from_files(changed_files)
-    all_libs = list(set(imported_libs + path_libs))
+    """Fetch documentation for the primary library of the instance's repo.
+
+    Only fetches docs for the library that matches the repo (e.g., django docs
+    for django/django), not for random imports like sys or re.
+
+    :param repo: GitHub repo path, used to determine which library to fetch docs for.
+    """
+    primary_lib = repo_to_library(repo)
+    if not primary_lib:
+        return {}
 
     short_query = problem_statement[:200].replace("\n", " ").strip()
 
     docs = {}
-    for lib in all_libs[:3]:
-        doc = fetch_context7_docs(lib, short_query)
-        if doc:
-            docs[lib] = doc
+    doc = fetch_context7_docs(primary_lib, short_query)
+    if doc:
+        docs[primary_lib] = doc
 
     return docs
 
@@ -197,7 +215,7 @@ def run(instances: list[dict]):
                 changed_files = extract_changed_files(inst["patch"])
 
             docs = get_documentation_for_instance(
-                changed_files, inst["patch"], inst["problem_statement"]
+                changed_files, inst["patch"], inst["problem_statement"], repo=inst.get("repo", "")
             )
 
             entry = {"instance_id": instance_id, "docs": docs}
