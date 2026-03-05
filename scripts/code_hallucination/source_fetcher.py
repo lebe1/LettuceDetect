@@ -43,7 +43,7 @@ def clone_repo(repo: str, repos_dir: Path = REPOS_DIR) -> Path | None:
             ["git", "clone", "--bare", f"https://github.com/{repo}.git", str(repo_dir)],
             capture_output=True,
             text=True,
-            timeout=1800,  # 30 min for large repos
+            timeout=60,  # 1 min timeout, fall back to GitHub API
         )
         if result.returncode != 0:
             print(f"  ERROR cloning {repo}: {result.stderr[:200]}")
@@ -493,16 +493,13 @@ def run(instances: list[dict], use_github_api: bool = False):
     print("=" * 60)
 
     SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    REPOS_DIR.mkdir(parents=True, exist_ok=True)
 
-    if not use_github_api:
-        REPOS_DIR.mkdir(parents=True, exist_ok=True)
-        # Group by repo for efficient cloning
-        repos = set(inst["repo"] for inst in instances)
-        print(f"Need to clone {len(repos)} repos")
-        for repo in sorted(repos):
-            clone_repo(repo)
-    else:
+    if use_github_api:
         print("Using GitHub raw API (no cloning)")
+
+    # Track repos that failed to clone so we don't retry
+    clone_failed_repos: set[str] = set()
 
     # Fetch sources per instance
     results = []
@@ -519,10 +516,21 @@ def run(instances: list[dict], use_github_api: bool = False):
                 results.append(json.load(f))
             continue
 
-        result = fetch_source_for_instance(instance, use_github_api=use_github_api)
+        # Try clone first, fall back to GitHub API
+        repo = instance["repo"]
+        use_api_for_this = use_github_api
+        if not use_api_for_this and repo not in clone_failed_repos:
+            repo_dir = clone_repo(repo)
+            if repo_dir is None:
+                clone_failed_repos.add(repo)
+                use_api_for_this = True
+                print(f"  Falling back to GitHub API for {repo}")
+
+        result = fetch_source_for_instance(
+            instance, use_github_api=use_api_for_this or repo in clone_failed_repos
+        )
         if result:
             results.append(result)
-            # Cache result
             cache_path = SOURCE_CACHE_DIR / f"{instance['instance_id']}.json"
             with open(cache_path, "w") as f:
                 json.dump(result, f)
