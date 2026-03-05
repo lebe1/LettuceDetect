@@ -5,12 +5,13 @@ Uses LettuceDetect's existing LLMDetector and evaluator infrastructure.
 Supports Groq API with any OpenAI-compatible model.
 
 Usage:
-    # With Groq + Kimi
+    # With Groq
     OPENAI_API_KEY=gsk_... OPENAI_API_BASE=https://api.groq.com/openai/v1 \
         python scripts/evaluate_code_hallucination.py \
         --model moonshotai/kimi-k2-instruct-0905 \
         --data_path data/code_hallucination_lettucedetect_v2.json \
-        --evaluation_type example_level
+        --evaluation_type example_level \
+        --split test
 """
 
 import argparse
@@ -210,9 +211,12 @@ def main():
         help="Limit number of test samples (for quick testing)",
     )
     parser.add_argument(
-        "--test_ratio", type=float, default=0.3, help="Fraction of data to use as test set"
+        "--split",
+        type=str,
+        default="test",
+        choices=["train", "dev", "test"],
+        help="Which split to evaluate on (uses the split field from the dataset)",
     )
-    parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
 
@@ -243,14 +247,13 @@ def main():
             )
         )
 
-    # Split into test set
-    import random
+    # Filter to the requested split
+    test_samples = [s for s in samples if s.split == args.split]
 
-    random.seed(args.seed)
-    random.shuffle(samples)
-
-    test_size = int(len(samples) * args.test_ratio)
-    test_samples = samples[:test_size]
+    if not test_samples:
+        available_splits = set(s.split for s in samples)
+        print(f"No samples found for split '{args.split}'. Available splits: {available_splits}")
+        return
 
     if args.max_samples:
         test_samples = test_samples[: args.max_samples]
@@ -260,7 +263,9 @@ def main():
 
     print(f"Dataset: {data_path}")
     print(f"Total samples: {len(samples)}")
-    print(f"Test samples: {len(test_samples)} (positive: {n_positive}, negative: {n_negative})")
+    print(
+        f"Evaluating on '{args.split}' split: {len(test_samples)} samples (positive: {n_positive}, negative: {n_negative})"
+    )
     print(f"Model: {args.model}")
     print(f"API base: {os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')}")
 
