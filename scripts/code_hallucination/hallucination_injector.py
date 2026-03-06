@@ -19,6 +19,7 @@ from .config import (
     HALLUCINATED_PATH,
     HALLUCINATION_TEMPERATURE,
     HALLUCINATION_TYPES,
+    MAX_PROMPT_CHARS,
     MAX_RETRIES,
     MODEL,
     RETRY_DELAY,
@@ -79,6 +80,20 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     - Each "hallucinated" value must be at least 20 characters long
     - Return ONLY valid JSON, nothing else
 """)
+
+
+def build_source_context(source_data: dict) -> str:
+    """Build source code context string from cached source data.
+
+    Truncates to MAX_PROMPT_CHARS so the final sample fits in 8K model context.
+    """
+    parts = []
+    for filepath, content in source_data.get("source_files", {}).items():
+        parts.append(f"File: {filepath}\n```python\n{content}\n```")
+    context = "\n\n".join(parts)
+    if len(context) > MAX_PROMPT_CHARS:
+        context = context[:MAX_PROMPT_CHARS]
+    return context
 
 
 def inject_hallucination(
@@ -318,6 +333,7 @@ def run(
     formats: dict[str, dict],
     queries: dict[str, str],
     docs: dict[str, dict] | None = None,
+    source_cache: dict[str, dict] | None = None,
     api_key: str = API_KEY,
     base_url: str = API_BASE_URL,
     model: str = MODEL,
@@ -333,6 +349,8 @@ def run(
 
     if docs is None:
         docs = {}
+    if source_cache is None:
+        source_cache = {}
 
     HALLUCINATED_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -350,9 +368,13 @@ def run(
     print(f"Remaining: {len(to_process)} instances to inject")
 
     if BATCH_SIZE > 1:
-        results = _run_batched(to_process, formats, queries, docs, api_key, base_url, model)
+        results = _run_batched(
+            to_process, formats, queries, docs, source_cache, api_key, base_url, model
+        )
     else:
-        results = _run_sequential(to_process, formats, queries, docs, api_key, base_url, model)
+        results = _run_sequential(
+            to_process, formats, queries, docs, source_cache, api_key, base_url, model
+        )
 
     # Stats
     type_counts = {}
@@ -372,7 +394,7 @@ def run(
     return results
 
 
-def _run_sequential(to_process, formats, queries, docs, api_key, base_url, model):
+def _run_sequential(to_process, formats, queries, docs, source_cache, api_key, base_url, model):
     """Sequential processing for remote APIs (rate-limited)."""
     client = OpenAI(api_key=api_key, base_url=base_url)
     processed = 0
@@ -391,7 +413,12 @@ def _run_sequential(to_process, formats, queries, docs, api_key, base_url, model
 
             hall_type = HALLUCINATION_TYPES[i % len(HALLUCINATION_TYPES)]
             query = queries.get(instance_id, "")
-            context = inst.get("problem_statement", "")
+            source_data = source_cache.get(instance_id, {})
+            context = (
+                build_source_context(source_data)
+                if source_data
+                else inst.get("problem_statement", "")
+            )
             instance_docs = docs.get(instance_id, {})
 
             # Try injection with up to 2 quality retries
@@ -428,7 +455,7 @@ def _run_sequential(to_process, formats, queries, docs, api_key, base_url, model
     return results
 
 
-def _run_batched(to_process, formats, queries, docs, api_key, base_url, model):
+def _run_batched(to_process, formats, queries, docs, source_cache, api_key, base_url, model):
     """Async batch processing for local vLLM (no rate limiting needed)."""
     aclient = AsyncOpenAI(api_key=api_key, base_url=base_url)
     processed = 0
@@ -457,7 +484,12 @@ def _run_batched(to_process, formats, queries, docs, api_key, base_url, model):
 
                     hall_type = HALLUCINATION_TYPES[global_idx % len(HALLUCINATION_TYPES)]
                     query = queries.get(instance_id, "")
-                    context = inst.get("problem_statement", "")
+                    source_data = source_cache.get(instance_id, {})
+                    context = (
+                        build_source_context(source_data)
+                        if source_data
+                        else inst.get("problem_statement", "")
+                    )
                     instance_docs = docs.get(instance_id, {})
 
                     tasks.append(

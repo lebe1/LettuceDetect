@@ -29,7 +29,19 @@ from .config import (
     HALLUCINATED_PATH,
     MODEL,
     QUERIES_PATH,
+    SOURCE_CACHE_DIR,
 )
+
+
+def load_source_cache(instance_ids: list[str]) -> dict[str, dict]:
+    """Load source cache for given instance IDs."""
+    cache = {}
+    for iid in instance_ids:
+        cache_path = SOURCE_CACHE_DIR / f"{iid}.json"
+        if cache_path.exists():
+            with open(cache_path) as f:
+                cache[iid] = json.load(f)
+    return cache
 
 
 def load_jsonl_dict(path, key="instance_id", value_key=None) -> dict:
@@ -110,8 +122,16 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
     formats = load_jsonl_dict(FORMATS_PATH)
     docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
     to_inject = [i for i in selected if i["instance_id"] in targets]
+    sc = load_source_cache([i["instance_id"] for i in to_inject])
     run_inject(
-        to_inject, formats, queries_dict, docs=docs, api_key=api_key, base_url=base_url, model=model
+        to_inject,
+        formats,
+        queries_dict,
+        docs=docs,
+        source_cache=sc,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
     )
 
     # Phase 7: Assemble
@@ -210,11 +230,13 @@ def main():
             docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
             targets = select_hallucination_targets(instances)
             to_inject = [i for i in instances if i["instance_id"] in targets]
+            sc = load_source_cache([i["instance_id"] for i in to_inject])
             run(
                 to_inject,
                 formats,
                 queries,
                 docs=docs,
+                source_cache=sc,
                 api_key=args.api_key,
                 base_url=args.base_url,
                 model=args.model,

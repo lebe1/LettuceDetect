@@ -36,6 +36,7 @@ DOCS_RATIO = 0.2  # Only fetch docs for 20% of instances
 HALLUCINATION_RATIO = 0.4  # 40% hallucinated, 60% clean
 MAX_FILE_CHARS = 12000  # Cap individual source file size
 MAX_CONTEXT7_CHARS = 4000  # Documentation fetch limit
+MAX_PROMPT_CHARS = 24000  # ~6K tokens, leaves room for answer within 8K model context
 
 # === LLM Config ===
 RETRY_DELAY = 2

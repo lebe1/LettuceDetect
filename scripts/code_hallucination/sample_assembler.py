@@ -2,7 +2,7 @@
 
 import json
 
-from .config import DATASET_PATH, METADATA_PATH, SOURCE_CACHE_DIR
+from .config import DATASET_PATH, MAX_PROMPT_CHARS, METADATA_PATH, SOURCE_CACHE_DIR
 
 
 def build_prompt(
@@ -24,7 +24,10 @@ def build_prompt(
 
     parts.append(f"User request: {user_query}")
 
-    return "\n\n".join(parts)
+    prompt = "\n\n".join(parts)
+    if len(prompt) > MAX_PROMPT_CHARS:
+        prompt = prompt[:MAX_PROMPT_CHARS]
+    return prompt
 
 
 def assemble_samples(
