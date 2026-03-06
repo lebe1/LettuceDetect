@@ -29,24 +29,30 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     You are a code hallucination injector for building a hallucination detection dataset.
 
     Given a correct answer (which may be pure code OR code with natural language explanation)
-    and context, create a hallucinated version with specific types of errors.
+    and SOURCE CODE CONTEXT, create a hallucinated version with specific types of errors.
+
+    CRITICAL: Every error you inject MUST BE DETECTABLE by comparing the answer against
+    the provided source code context AND/OR the user's request. A human reading the
+    source files and user query must be able to spot that the hallucinated part
+    contradicts what's in the source or what the user asked for. Do NOT inject errors
+    that require running the code or external knowledge to detect.
 
     Hallucination types:
-    - STRUCTURAL: Change a function call, import, or parameter to something that
-      doesn't exist or is wrong. Code should still parse but reference non-existent
-      APIs, wrong methods, or invented parameters.
-    - BEHAVIORAL: Use correct APIs but with wrong values or logic. Wrong defaults,
-      off-by-one errors, swapped conditions, wrong argument values.
-    - SEMANTIC: Code that looks like it addresses the user's request but does
-      something subtly different or opposite. The code parses, uses real APIs,
-      but fails to do what was asked. If library documentation is provided,
-      you can make the code contradict the documented API (wrong parameter names,
-      wrong return types, deprecated usage, etc.).
-      For answers with explanations, you may also make the explanation contradict
-      the code or describe incorrect behavior.
+    - STRUCTURAL: Change a function/method/class name, import, or parameter to something
+      that does NOT exist in the source context. For example, rename a method call to one
+      that isn't defined in the provided source files, or add a parameter that the function
+      doesn't accept according to the source.
+    - BEHAVIORAL: Use correct API names from the source but with wrong values or logic
+      that contradicts the source. Wrong default values (different from source), swapped
+      conditions, wrong argument order compared to the function signature in source.
+    - SEMANTIC: Code that contradicts the source's behavior, the user's request, or the
+      explanation contradicts what the source code actually does. For example: claim a
+      function returns X when the source shows it returns Y, describe wrong control flow,
+      or solve a different problem than what the user asked for.
 
     Rules:
     - Make 2-3 DISTINCT changes spread across different parts of the answer
+    - Each change MUST contradict something visible in the source code or user request
     - Each changed span must be 20-150 characters long (not too short, not too long)
     - Total hallucinated text must be LESS THAN 40% of the original answer length
     - Keep most of the answer CORRECT — do NOT rewrite the entire thing
@@ -54,11 +60,7 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     - Make changes PLAUSIBLE — something an LLM would realistically generate
     - Changes must be SUBTLE, not obviously broken
     - The code in the hallucinated answer must still be syntactically valid
-    - Do NOT add comments explaining or hinting at the hallucination (no "# wrong",
-      "# error", "# typo", "# nonexistent", etc.) — the errors must be invisible
-      to someone skimming the answer
-    - If the answer contains both code and explanation, inject errors in BOTH parts
-      (e.g. wrong API in code + misleading description in text)
+    - Do NOT add comments explaining or hinting at the hallucination
     - Preserve the overall structure: keep markdown formatting, code blocks, etc.
 
     Respond in this exact JSON format (no markdown, no code blocks):
@@ -68,7 +70,7 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
             {
                 "original": "exact original text that was changed",
                 "hallucinated": "what you changed it to",
-                "explanation": "why this is a hallucination"
+                "explanation": "why this is wrong — what does the source code or user request actually say?"
             }
         ]
     }
@@ -78,6 +80,7 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     - "original" must be an exact substring of the correct answer
     - "hallucinated" must be an exact substring of your hallucinated answer
     - Each "hallucinated" value must be at least 20 characters long
+    - Each "explanation" must reference what the source code or user request actually says
     - Return ONLY valid JSON, nothing else
 """)
 
