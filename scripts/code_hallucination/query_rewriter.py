@@ -14,6 +14,7 @@ from .config import (
     MODEL,
     QUERIES_PATH,
     RETRY_DELAY,
+    token_limit_kwargs,
 )
 
 REWRITE_SYSTEM_PROMPT = textwrap.dedent("""\
@@ -52,7 +53,7 @@ def llm_call(
                     {"role": "user", "content": user},
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
+                **token_limit_kwargs(model, max_tokens),
             )
             return response.choices[0].message.content.strip()
         except Exception as e:

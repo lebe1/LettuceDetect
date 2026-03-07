@@ -1,10 +1,31 @@
 """Phase 9: Quality checks and validation report."""
 
 import ast
+import difflib
 import json
 from collections import Counter
 
-from .config import DATASET_PATH, METADATA_PATH, VALIDATION_REPORT_PATH
+from .config import DATASET_PATH, FORMATS_PATH, METADATA_PATH, VALIDATION_REPORT_PATH
+
+LEAKY_TERMS = (
+    "bug",
+    "wrong",
+    "incorrect",
+    "incorrectly",
+    "deprecated",
+    "hallucination",
+    "helper method",
+    "should be replaced",
+)
+
+
+def _max_allowed_coverage(answer_len: int) -> float:
+    """Use a looser coverage cap for short answers and fragments."""
+    if answer_len <= 400:
+        return 0.40
+    if answer_len <= 800:
+        return 0.35
+    return 0.30
 
 
 def validate_spans(samples: list[dict]) -> list[str]:
@@ -12,6 +33,8 @@ def validate_spans(samples: list[dict]) -> list[str]:
     issues = []
     for i, sample in enumerate(samples):
         answer_len = len(sample["answer"])
+        previous_end = -1
+        seen = set()
         for label in sample.get("labels", []):
             start = label.get("start", 0)
             end = label.get("end", 0)
@@ -21,7 +44,138 @@ def validate_spans(samples: list[dict]) -> list[str]:
                 issues.append(f"Sample {i}: empty/inverted span ({start}, {end})")
             if end > answer_len:
                 issues.append(f"Sample {i}: span exceeds answer length ({end} > {answer_len})")
+            if start < previous_end:
+                issues.append(f"Sample {i}: unsorted/overlapping spans ({start} < {previous_end})")
+            if (start, end, label.get("label")) in seen:
+                issues.append(f"Sample {i}: duplicate span ({start}, {end})")
+            seen.add((start, end, label.get("label")))
+            previous_end = end
     return issues
+
+
+def _extract_code_regions(answer: str) -> list[tuple[int, int]]:
+    """Return markdown fenced code block ranges, or the whole answer if none."""
+    regions = []
+    idx = 0
+    while True:
+        start = answer.find("```", idx)
+        if start == -1:
+            break
+        code_start = answer.find("\n", start + 3)
+        if code_start == -1:
+            break
+        code_start += 1
+        end = answer.find("```", code_start)
+        if end == -1:
+            break
+        regions.append((code_start, end))
+        idx = end + 3
+    if not regions:
+        return [(0, len(answer))]
+    return regions
+
+
+def _span_is_in_code(answer: str, start: int, end: int) -> bool:
+    """Check whether a span is fully inside a fenced code region."""
+    return any(
+        start >= code_start and end <= code_end
+        for code_start, code_end in _extract_code_regions(answer)
+    )
+
+
+def _is_whitespace_only_diff(original_text: str, hallucinated_text: str) -> bool:
+    """Treat pure whitespace edits as ignorable when checking diff coverage."""
+    return (original_text or "").strip() == "" and (hallucinated_text or "").strip() == ""
+
+
+def _diff_outside_labels(
+    original_answer: str, hallucinated_answer: str, labels: list[dict]
+) -> list[dict]:
+    """Return meaningful diffs not covered by any labeled hallucinated span."""
+    label_ranges = [(lab["start"], lab["end"]) for lab in labels]
+
+    def is_covered(start: int, end: int) -> bool:
+        return any(
+            not (end <= lab_start or start >= lab_end) for lab_start, lab_end in label_ranges
+        )
+
+    uncovered = []
+    matcher = difflib.SequenceMatcher(a=original_answer, b=hallucinated_answer)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+
+        original_chunk = original_answer[i1:i2]
+        hallucinated_chunk = hallucinated_answer[j1:j2]
+        if _is_whitespace_only_diff(original_chunk, hallucinated_chunk):
+            continue
+
+        if j1 == j2:
+            continue
+
+        if not is_covered(j1, j2):
+            uncovered.append(
+                {
+                    "tag": tag,
+                    "start": j1,
+                    "end": j2,
+                    "original": original_chunk[:80],
+                    "hallucinated": hallucinated_chunk[:80],
+                }
+            )
+
+    return uncovered
+
+
+def check_label_quality(samples: list[dict], metadata: list[dict]) -> dict:
+    """Report common synthetic-label issues that should be filtered before training."""
+    issues = Counter()
+    original_answers = {}
+    if FORMATS_PATH.exists():
+        with open(FORMATS_PATH) as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                original_answers[entry.get("instance_id")] = entry.get("answer", "")
+
+    for sample, meta in zip(samples, metadata):
+        if not sample.get("labels"):
+            continue
+
+        answer = sample["answer"]
+        coverage = sum(label["end"] - label["start"] for label in sample["labels"]) / max(
+            len(answer), 1
+        )
+        if coverage > _max_allowed_coverage(len(answer)):
+            issues["coverage_over_30pct"] += 1
+
+        for label in sample["labels"]:
+            span_text = answer[label["start"] : label["end"]]
+            if any(term in span_text.lower() for term in LEAKY_TERMS):
+                issues["labels_with_leakage_terms"] += 1
+                break
+
+        if meta.get("format_type") == "code_with_explanation":
+            if any(
+                not _span_is_in_code(answer, label["start"], label["end"])
+                for label in sample["labels"]
+            ):
+                issues["code_with_explanation_label_outside_code"] += 1
+
+        original_answer = original_answers.get(meta.get("instance_id"))
+        if original_answer:
+            uncovered_diffs = _diff_outside_labels(original_answer, answer, sample["labels"])
+            if uncovered_diffs:
+                issues["diff_outside_labels"] += 1
+                if any(
+                    diff["tag"] == "insert" or len(diff["hallucinated"]) >= 20
+                    for diff in uncovered_diffs
+                ):
+                    issues["large_diff_outside_labels"] += 1
+
+    return dict(issues)
 
 
 def check_span_coverage(samples: list[dict]) -> dict:
@@ -168,14 +322,21 @@ def run(samples: list[dict] = None, metadata: list[dict] = None):
     report(f"Near duplicates (sampled): {n_dup}")
     report("")
 
-    # 5. AST parseability
+    # 5. Label quality
+    report("=== Label Quality ===")
+    label_quality = check_label_quality(samples, metadata)
+    for k, v in label_quality.items():
+        report(f"  {k}: {v}")
+    report("")
+
+    # 6. AST parseability
     report("=== AST Parseability ===")
     ast_check = check_ast_parseability(samples, metadata)
     for k, v in ast_check.items():
         report(f"  {k}: {v}")
     report("")
 
-    # 6. Length stats
+    # 7. Length stats
     report("=== Length Statistics ===")
     prompt_lens = [len(s["prompt"]) for s in samples]
     answer_lens = [len(s["answer"]) for s in samples]

@@ -24,6 +24,7 @@ from .config import (
     MODEL,
     RETRY_DELAY,
     SOURCE_CACHE_DIR,
+    token_limit_kwargs,
 )
 
 EXPLANATION_SYSTEM_PROMPT = textwrap.dedent("""\
@@ -78,7 +79,7 @@ Write a natural AI assistant response that includes this exact code."""
                     {"role": "user", "content": user_msg},
                 ],
                 temperature=LLM_TEMPERATURE,
-                max_tokens=200,
+                **token_limit_kwargs(model, 200),
             )
             result = response.choices[0].message.content.strip()
             # Verify the code is actually in the response
@@ -122,7 +123,7 @@ Write a natural AI assistant response that includes this exact code."""
                     {"role": "user", "content": user_msg},
                 ],
                 temperature=LLM_TEMPERATURE,
-                max_tokens=200,
+                **token_limit_kwargs(model, 200),
             )
             result = response.choices[0].message.content.strip()
             if code[:50] in result or "```" in result:

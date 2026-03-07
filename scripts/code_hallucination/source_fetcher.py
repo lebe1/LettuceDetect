@@ -15,6 +15,72 @@ from .config import MAX_FILE_CHARS, REPOS_DIR, SOURCE_CACHE_DIR
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
 
 
+def truncate_around_patch(
+    full_content: str, patch: str, filepath: str, max_chars: int = MAX_FILE_CHARS
+) -> str:
+    """Truncate a source file keeping the region around the patch.
+
+    Instead of taking the first N chars (which may miss the patched region),
+    find where the patch applies and keep a window around it, plus the file header
+    (imports/class definitions).
+    """
+    if len(full_content) <= max_chars:
+        return full_content
+
+    # Find the hunk start lines from the patch for this file
+    hunk_lines = []
+    in_file = False
+    for line in patch.split("\n"):
+        if line.startswith("diff --git"):
+            match = re.match(r"diff --git a/(.+?) b/(.+)$", line)
+            in_file = match is not None and match.group(2) == filepath
+        elif in_file and line.startswith("@@"):
+            hunk_match = re.match(r"@@ -(\d+)", line)
+            if hunk_match:
+                hunk_lines.append(int(hunk_match.group(1)))
+
+    if not hunk_lines:
+        # Can't find patch location, fall back to first N chars
+        return full_content[:max_chars]
+
+    lines = full_content.split("\n")
+
+    # Always keep the header (imports, class defs) — first 50 lines or until first function
+    header_end = min(50, len(lines))
+    for i, line in enumerate(lines[:200]):
+        if line.strip().startswith("def ") or line.strip().startswith("class "):
+            if i > 20:
+                header_end = i
+                break
+
+    header = "\n".join(lines[:header_end])
+    header_chars = len(header)
+    remaining_budget = max_chars - header_chars - 100  # 100 for separator
+
+    if remaining_budget <= 0:
+        return full_content[:max_chars]
+
+    # Build a window around the patch hunks
+    min_hunk = min(hunk_lines) - 1  # Convert to 0-based
+    max_hunk = max(hunk_lines) - 1
+
+    # Expand window to use the remaining budget
+    lines_budget = remaining_budget // 80  # Rough estimate: 80 chars per line
+    padding = max(lines_budget // 2, 30)
+
+    window_start = max(header_end, min_hunk - padding)
+    window_end = min(len(lines), max_hunk + padding)
+
+    window = "\n".join(lines[window_start:window_end])
+
+    if window_start > header_end:
+        result = header + "\n\n# ... (truncated) ...\n\n" + window
+    else:
+        result = header + "\n" + window
+
+    return result[:max_chars]
+
+
 def extract_changed_files(patch: str) -> list[str]:
     """Extract file paths from a unified diff using anchored regex.
 
@@ -62,7 +128,7 @@ def fetch_file_from_github(repo: str, commit: str, filepath: str) -> str | None:
     try:
         r = requests.get(url, timeout=15)
         if r.status_code == 200:
-            return r.text[:MAX_FILE_CHARS]
+            return r.text
         return None
     except Exception:
         return None
@@ -79,7 +145,7 @@ def fetch_file_at_commit(repo_dir: Path, commit: str, filepath: str) -> str | No
             timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout[:MAX_FILE_CHARS]
+            return result.stdout
         return None
     except (subprocess.TimeoutExpired, Exception) as e:
         print(f"    Error fetching {filepath}@{commit[:8]}: {e}")
@@ -119,8 +185,7 @@ def apply_patch_and_get_file(repo_dir: Path, commit: str, patch: str, filepath: 
             # Read the patched file
             patched_path = Path(tmpdir) / filepath
             if patched_path.exists():
-                content = patched_path.read_text()[:MAX_FILE_CHARS]
-                return content
+                return patched_path.read_text()
 
             # Clean up worktree
             subprocess.run(
@@ -458,7 +523,7 @@ def fetch_source_for_instance(
     # Edit-style format
     edit_style = build_edit_style_answer(patch, changed_files)
 
-    # Complete function format — extract modified functions
+    # Complete function format — extract modified functions (needs full content)
     modified_functions = []
     for filepath in changed_files:
         if filepath not in source_files:
@@ -469,6 +534,11 @@ def fetch_source_for_instance(
             for func in funcs:
                 func["file"] = filepath
             modified_functions.extend(funcs)
+
+    # Smart truncation AFTER patch application: keep header + patch-relevant regions
+    # instead of blind first-N-chars truncation
+    for filepath in list(source_files.keys()):
+        source_files[filepath] = truncate_around_patch(source_files[filepath], patch, filepath)
 
     return {
         "instance_id": instance["instance_id"],

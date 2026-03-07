@@ -92,6 +92,12 @@ def assemble_samples(
             if not answer.strip():
                 continue
 
+            # Reject code_with_explanation with unbalanced fences
+            if fmt_data.get("format_type") == "code_with_explanation":
+                fence_count = answer.count("```")
+                if fence_count % 2 != 0 or fence_count == 0:
+                    continue
+
             sample = {
                 "prompt": prompt,
                 "answer": answer,
