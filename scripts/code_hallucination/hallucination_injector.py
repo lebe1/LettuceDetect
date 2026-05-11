@@ -84,6 +84,8 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     - Do NOT add imports, helper functions, or surrounding code
     - Prefer changing existing lines over insertions or deletions
     - Each edit must replace an existing substring of the original answer; no insert-only edits
+    - Choose exact substrings that appear exactly once in the original answer whenever possible
+    - Prefer whole expressions or full lines over tiny fragments
 
     Respond in this exact JSON format (no markdown, no code blocks):
     {
@@ -91,12 +93,40 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
             {
                 "original": "exact original substring from the correct answer",
                 "hallucinated": "replacement text for that substring",
-                "left_context": "up to 40 exact characters immediately before the original substring in the correct answer",
-                "right_context": "up to 40 exact characters immediately after the original substring in the correct answer",
                 "target_zone": "code",
                 "explanation": "why this replacement is wrong according to the source code or user request"
             }
         ]
+    }
+
+    Example 1:
+    Original answer contains:
+        return self.steps[-1][-1].transform(X)
+    Good JSON change:
+    {
+      "changes": [
+        {
+          "original": "return self.steps[-1][-1].transform(X)",
+          "hallucinated": "return self.steps[-1][-1].predict(X)",
+          "target_zone": "code",
+          "explanation": "The source context shows this method should transform the data, not run prediction."
+        }
+      ]
+    }
+
+    Example 2:
+    Original answer contains:
+        if handle_unknown == 'error':
+    Good JSON change:
+    {
+      "changes": [
+        {
+          "original": "if handle_unknown == 'error':",
+          "hallucinated": "if handle_unknown != 'error':",
+          "target_zone": "code",
+          "explanation": "This flips the branch condition and contradicts the intended error handling in the source."
+        }
+      ]
     }
 
     IMPORTANT:
@@ -105,9 +135,8 @@ INJECTION_SYSTEM_PROMPT = textwrap.dedent("""\
     - "original" must be a non-empty exact substring of the correct answer
     - Before returning, verify that each "original" substring appears verbatim in the provided correct answer
     - Prefer substrings that appear exactly once in the correct answer
-    - If a substring appears multiple times, use left_context and right_context that disambiguate a single occurrence
+    - If a substring appears multiple times, pick a different, longer substring that uniquely identifies the target location
     - "hallucinated" is the exact replacement text for that substring
-    - "left_context" and "right_context" must come from the original correct answer, not a rewritten one
     - "target_zone" must always be "code"
     - Each "explanation" must reference what the source code or user request actually says
     - If you cannot find 1-3 exact editable substrings in the provided answer, return {"changes": []}
@@ -238,13 +267,6 @@ def _find_all_occurrences(text: str, pattern: str) -> list[dict]:
     return offsets
 
 
-def _truncate_context(text: str, max_chars: int = 40) -> str:
-    """Normalize context fields to the same length budget used in the prompt."""
-    if len(text) <= max_chars:
-        return text
-    return text[-max_chars:]
-
-
 def _extract_code_regions(answer: str) -> list[tuple[int, int]]:
     """Return ranges that correspond to markdown fenced code blocks.
 
@@ -294,7 +316,7 @@ def _max_allowed_coverage(answer_len: int) -> float:
 
 
 def _locate_original_change(original_answer: str, change: dict) -> dict | None:
-    """Locate a replacement span in the original answer using substring plus context."""
+    """Locate a replacement span in the original answer by exact unique match."""
     original_span = change.get("original", "")
     hallucinated_span = change.get("hallucinated", "")
     if not original_span or not hallucinated_span:
@@ -303,34 +325,29 @@ def _locate_original_change(original_answer: str, change: dict) -> dict | None:
         return None
 
     offsets = _find_all_occurrences(original_answer, original_span)
-    if not offsets:
-        return None
-
-    left_context = _truncate_context(change.get("left_context", ""))
-    right_context = _truncate_context(change.get("right_context", ""))
-    filtered = []
-    for offset in offsets:
-        start = offset["start"]
-        end = offset["end"]
-        observed_left = _truncate_context(
-            original_answer[max(0, start - len(left_context)) : start]
-        )
-        observed_right = original_answer[end : end + len(right_context)]
-        left_ok = not left_context or observed_left == left_context
-        right_ok = not right_context or observed_right == right_context
-        if left_ok and right_ok:
-            filtered.append(offset)
-
-    matches = filtered or offsets
-    if len(matches) != 1:
+    if len(offsets) != 1:
         return None
 
     return {
-        "start": matches[0]["start"],
-        "end": matches[0]["end"],
+        "start": offsets[0]["start"],
+        "end": offsets[0]["end"],
         "original": original_span,
         "hallucinated": hallucinated_span,
     }
+
+
+def _sort_changes_by_original_position(
+    original_answer: str, changes: list[dict]
+) -> list[dict] | None:
+    """Return changes ordered by their matched position in the original answer."""
+    located = []
+    for change in changes:
+        loc = _locate_original_change(original_answer, change)
+        if loc is None:
+            return None
+        located.append((loc["start"], loc["end"], change))
+    located.sort(key=lambda item: (item[0], item[1]))
+    return [change for _, _, change in located]
 
 
 def apply_changes_to_answer(
@@ -514,6 +531,9 @@ def _process_result(result, instance_id, hall_type, fmt_data, model):
     hallucinated_code, labels = apply_changes_to_answer(original_answer, changes, hall_type)
     if hallucinated_code is None or labels is None:
         return None
+    ordered_changes = _sort_changes_by_original_position(original_answer, changes)
+    if ordered_changes is None:
+        return None
     format_type = fmt_data.get("format_type", "fragment")
 
     valid, reason = _validate_labels(original_answer, hallucinated_code, labels, format_type)
@@ -527,7 +547,7 @@ def _process_result(result, instance_id, hall_type, fmt_data, model):
         "hallucination_type": hall_type,
         "injector_model": model,
         "format_type": format_type,
-        "changes": changes,
+        "changes": ordered_changes,
     }
 
 
