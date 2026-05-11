@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import tempfile
+import warnings
 from pathlib import Path
 
 import requests
@@ -12,6 +13,72 @@ import requests
 from .config import MAX_FILE_CHARS, REPOS_DIR, SOURCE_CACHE_DIR
 
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
+
+
+def truncate_around_patch(
+    full_content: str, patch: str, filepath: str, max_chars: int = MAX_FILE_CHARS
+) -> str:
+    """Truncate a source file keeping the region around the patch.
+
+    Instead of taking the first N chars (which may miss the patched region),
+    find where the patch applies and keep a window around it, plus the file header
+    (imports/class definitions).
+    """
+    if len(full_content) <= max_chars:
+        return full_content
+
+    # Find the hunk start lines from the patch for this file
+    hunk_lines = []
+    in_file = False
+    for line in patch.split("\n"):
+        if line.startswith("diff --git"):
+            match = re.match(r"diff --git a/(.+?) b/(.+)$", line)
+            in_file = match is not None and match.group(2) == filepath
+        elif in_file and line.startswith("@@"):
+            hunk_match = re.match(r"@@ -(\d+)", line)
+            if hunk_match:
+                hunk_lines.append(int(hunk_match.group(1)))
+
+    if not hunk_lines:
+        # Can't find patch location, fall back to first N chars
+        return full_content[:max_chars]
+
+    lines = full_content.split("\n")
+
+    # Always keep the header (imports, class defs) — first 50 lines or until first function
+    header_end = min(50, len(lines))
+    for i, line in enumerate(lines[:200]):
+        if line.strip().startswith("def ") or line.strip().startswith("class "):
+            if i > 20:
+                header_end = i
+                break
+
+    header = "\n".join(lines[:header_end])
+    header_chars = len(header)
+    remaining_budget = max_chars - header_chars - 100  # 100 for separator
+
+    if remaining_budget <= 0:
+        return full_content[:max_chars]
+
+    # Build a window around the patch hunks
+    min_hunk = min(hunk_lines) - 1  # Convert to 0-based
+    max_hunk = max(hunk_lines) - 1
+
+    # Expand window to use the remaining budget
+    lines_budget = remaining_budget // 80  # Rough estimate: 80 chars per line
+    padding = max(lines_budget // 2, 30)
+
+    window_start = max(header_end, min_hunk - padding)
+    window_end = min(len(lines), max_hunk + padding)
+
+    window = "\n".join(lines[window_start:window_end])
+
+    if window_start > header_end:
+        result = header + "\n\n# ... (truncated) ...\n\n" + window
+    else:
+        result = header + "\n" + window
+
+    return result[:max_chars]
 
 
 def extract_changed_files(patch: str) -> list[str]:
@@ -43,7 +110,7 @@ def clone_repo(repo: str, repos_dir: Path = REPOS_DIR) -> Path | None:
             ["git", "clone", "--bare", f"https://github.com/{repo}.git", str(repo_dir)],
             capture_output=True,
             text=True,
-            timeout=1800,  # 30 min for large repos
+            timeout=60,  # 1 min timeout, fall back to GitHub API
         )
         if result.returncode != 0:
             print(f"  ERROR cloning {repo}: {result.stderr[:200]}")
@@ -61,7 +128,7 @@ def fetch_file_from_github(repo: str, commit: str, filepath: str) -> str | None:
     try:
         r = requests.get(url, timeout=15)
         if r.status_code == 200:
-            return r.text[:MAX_FILE_CHARS]
+            return r.text
         return None
     except Exception:
         return None
@@ -78,7 +145,7 @@ def fetch_file_at_commit(repo_dir: Path, commit: str, filepath: str) -> str | No
             timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout[:MAX_FILE_CHARS]
+            return result.stdout
         return None
     except (subprocess.TimeoutExpired, Exception) as e:
         print(f"    Error fetching {filepath}@{commit[:8]}: {e}")
@@ -118,8 +185,7 @@ def apply_patch_and_get_file(repo_dir: Path, commit: str, patch: str, filepath: 
             # Read the patched file
             patched_path = Path(tmpdir) / filepath
             if patched_path.exists():
-                content = patched_path.read_text()[:MAX_FILE_CHARS]
-                return content
+                return patched_path.read_text()
 
             # Clean up worktree
             subprocess.run(
@@ -143,7 +209,9 @@ def extract_modified_functions(original_source: str, patched_source: str) -> lis
     def get_functions(source: str) -> dict[str, str]:
         """Parse source and extract function name -> source mapping."""
         try:
-            tree = ast.parse(source)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", SyntaxWarning)
+                tree = ast.parse(source)
         except SyntaxError:
             return {}
 
@@ -455,20 +523,22 @@ def fetch_source_for_instance(
     # Edit-style format
     edit_style = build_edit_style_answer(patch, changed_files)
 
-    # Complete function format — extract modified functions
+    # Complete function format — extract modified functions (needs full content)
     modified_functions = []
     for filepath in changed_files:
         if filepath not in source_files:
             continue
-        if repo_dir is not None:
-            patched_source = apply_patch_and_get_file(repo_dir, commit, patch, filepath)
-        else:
-            patched_source = apply_patch_in_memory(source_files[filepath], patch, filepath)
+        patched_source = apply_patch_in_memory(source_files[filepath], patch, filepath)
         if patched_source:
             funcs = extract_modified_functions(source_files[filepath], patched_source)
             for func in funcs:
                 func["file"] = filepath
             modified_functions.extend(funcs)
+
+    # Smart truncation AFTER patch application: keep header + patch-relevant regions
+    # instead of blind first-N-chars truncation
+    for filepath in list(source_files.keys()):
+        source_files[filepath] = truncate_around_patch(source_files[filepath], patch, filepath)
 
     return {
         "instance_id": instance["instance_id"],
@@ -492,25 +562,25 @@ def run(instances: list[dict], use_github_api: bool = False):
     print("Phase 2: Source File Fetching")
     print("=" * 60)
 
-    SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    # Suppress SyntaxWarning from ast.parse on third-party source files
+    warnings.filterwarnings("ignore", category=SyntaxWarning)
 
-    if not use_github_api:
-        REPOS_DIR.mkdir(parents=True, exist_ok=True)
-        # Group by repo for efficient cloning
-        repos = set(inst["repo"] for inst in instances)
-        print(f"Need to clone {len(repos)} repos")
-        for repo in sorted(repos):
-            clone_repo(repo)
-    else:
+    SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    REPOS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if use_github_api:
         print("Using GitHub raw API (no cloning)")
+
+    # Track repos that failed to clone so we don't retry
+    clone_failed_repos: set[str] = set()
 
     # Fetch sources per instance
     results = []
     failed = 0
 
     for i, instance in enumerate(instances):
-        if (i + 1) % 100 == 0:
-            print(f"  Progress: {i + 1}/{len(instances)} ({len(results)} success, {failed} failed)")
+        if (i + 1) % 100 == 0 or (i + 1) == len(instances):
+            print(f"  Phase 2: {i + 1}/{len(instances)} ({len(results)} success, {failed} failed)")
 
         # Skip if already cached
         cache_path = SOURCE_CACHE_DIR / f"{instance['instance_id']}.json"
@@ -519,10 +589,21 @@ def run(instances: list[dict], use_github_api: bool = False):
                 results.append(json.load(f))
             continue
 
-        result = fetch_source_for_instance(instance, use_github_api=use_github_api)
+        # Try clone first, fall back to GitHub API
+        repo = instance["repo"]
+        use_api_for_this = use_github_api
+        if not use_api_for_this and repo not in clone_failed_repos:
+            repo_dir = clone_repo(repo)
+            if repo_dir is None:
+                clone_failed_repos.add(repo)
+                use_api_for_this = True
+                print(f"  Falling back to GitHub API for {repo}")
+
+        result = fetch_source_for_instance(
+            instance, use_github_api=use_api_for_this or repo in clone_failed_repos
+        )
         if result:
             results.append(result)
-            # Cache result
             cache_path = SOURCE_CACHE_DIR / f"{instance['instance_id']}.json"
             with open(cache_path, "w") as f:
                 json.dump(result, f)

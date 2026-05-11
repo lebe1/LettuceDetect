@@ -14,6 +14,7 @@ from .config import (
     MODEL,
     QUERIES_PATH,
     RETRY_DELAY,
+    token_limit_kwargs,
 )
 
 REWRITE_SYSTEM_PROMPT = textwrap.dedent("""\
@@ -52,7 +53,7 @@ def llm_call(
                     {"role": "user", "content": user},
                 ],
                 temperature=temperature,
-                max_tokens=max_tokens,
+                **token_limit_kwargs(model, max_tokens),
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -123,8 +124,8 @@ def run(
                 f.flush()
                 processed += 1
 
-                if processed % 50 == 0:
-                    print(f"  Progress: {processed}/{len(to_process)} (failed: {failed})")
+                if processed % 100 == 0:
+                    print(f"  Phase 3: {processed}/{len(to_process)} (failed: {failed})")
             except Exception as e:
                 print(f"  ERROR {instance_id}: {e}")
                 failed += 1

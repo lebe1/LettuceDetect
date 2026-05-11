@@ -20,16 +20,19 @@ import argparse
 import json
 import random
 
-from .config import (
-    API_BASE_URL,
-    API_KEY,
-    DATA_DIR,
-    DOCS_PATH,
-    FORMATS_PATH,
-    HALLUCINATED_PATH,
-    MODEL,
-    QUERIES_PATH,
-)
+from . import config
+from .config import API_BASE_URL, API_KEY, MODEL
+
+
+def load_source_cache(instance_ids: list[str]) -> dict[str, dict]:
+    """Load source cache for given instance IDs."""
+    cache = {}
+    for iid in instance_ids:
+        cache_path = config.SOURCE_CACHE_DIR / f"{iid}.json"
+        if cache_path.exists():
+            with open(cache_path) as f:
+                cache[iid] = json.load(f)
+    return cache
 
 
 def load_jsonl_dict(path, key="instance_id", value_key=None) -> dict:
@@ -48,6 +51,16 @@ def load_jsonl_dict(path, key="instance_id", value_key=None) -> dict:
             except (json.JSONDecodeError, KeyError):
                 continue
     return result
+
+
+def filter_instances_by_splits(instances: list[dict], splits: list[str] | None) -> list[dict]:
+    """Optionally filter instances to a subset of SWE-bench splits."""
+    if not splits:
+        return instances
+    split_set = set(splits)
+    filtered = [inst for inst in instances if inst.get("split") in split_set]
+    print(f"Using splits {sorted(split_set)}: {len(filtered)}/{len(instances)} instances")
+    return filtered
 
 
 def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, model: str = MODEL):
@@ -69,8 +82,8 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
     print(f"Selected {len(selected)} test instances")
 
     # Save temporary instances
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    test_path = DATA_DIR / "test_instances.json"
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    test_path = config.DATA_DIR / "test_instances.json"
     with open(test_path, "w") as f:
         json.dump(selected, f, indent=2)
 
@@ -96,7 +109,7 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
     # Phase 5: Assign formats (needs LLM for code_with_explanation)
     from .format_builder import run as run_formats
 
-    queries_dict = load_jsonl_dict(QUERIES_PATH, value_key="query")
+    queries_dict = load_jsonl_dict(config.QUERIES_PATH, value_key="query")
     run_formats(selected, api_key=api_key, base_url=base_url, model=model, queries=queries_dict)
 
     # Phase 8: Select targets (before phase 6)
@@ -107,17 +120,25 @@ def run_test(n: int = 5, api_key: str = API_KEY, base_url: str = API_BASE_URL, m
     # Phase 6: Inject hallucinations
     from .hallucination_injector import run as run_inject
 
-    formats = load_jsonl_dict(FORMATS_PATH)
-    docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
+    formats = load_jsonl_dict(config.FORMATS_PATH)
+    docs = load_jsonl_dict(config.DOCS_PATH, value_key="docs")
     to_inject = [i for i in selected if i["instance_id"] in targets]
+    sc = load_source_cache([i["instance_id"] for i in to_inject])
     run_inject(
-        to_inject, formats, queries_dict, docs=docs, api_key=api_key, base_url=base_url, model=model
+        to_inject,
+        formats,
+        queries_dict,
+        docs=docs,
+        source_cache=sc,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
     )
 
     # Phase 7: Assemble
     from .sample_assembler import run as run_assemble
 
-    hallucinations = load_jsonl_dict(HALLUCINATED_PATH)
+    hallucinations = load_jsonl_dict(config.HALLUCINATED_PATH)
     samples, metadata = run_assemble(selected, queries_dict, docs, formats, hallucinations, targets)
 
     # Phase 9: Validate
@@ -151,7 +172,22 @@ def main():
     parser.add_argument("--api-key", type=str, default=API_KEY, help="LLM API key")
     parser.add_argument("--base-url", type=str, default=API_BASE_URL, help="LLM API base URL")
     parser.add_argument("--model", type=str, default=MODEL, help="LLM model name")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Optional output directory for all intermediate and final pipeline files",
+    )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        choices=["train", "dev", "test"],
+        help="Optional SWE-bench splits to operate on",
+    )
     args = parser.parse_args()
+
+    if args.output_dir:
+        output_dir = config.set_output_dir(args.output_dir)
+        print(f"Using output directory: {output_dir}")
 
     if args.test:
         run_test(args.test, api_key=args.api_key, base_url=args.base_url, model=args.model)
@@ -176,24 +212,29 @@ def main():
             from .source_fetcher import run
             from .swebench_loader import load_instances
 
-            run(load_instances())
+            run(filter_instances_by_splits(load_instances(), args.splits))
         elif phase == 3:
             from .query_rewriter import run
             from .swebench_loader import load_instances
 
-            run(load_instances(), api_key=args.api_key, base_url=args.base_url, model=args.model)
+            run(
+                filter_instances_by_splits(load_instances(), args.splits),
+                api_key=args.api_key,
+                base_url=args.base_url,
+                model=args.model,
+            )
         elif phase == 4:
             from .context7_docs import run
             from .swebench_loader import load_instances
 
-            run(load_instances())
+            run(filter_instances_by_splits(load_instances(), args.splits))
         elif phase == 5:
             from .format_builder import run
             from .swebench_loader import load_instances
 
-            queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
+            queries = load_jsonl_dict(config.QUERIES_PATH, value_key="query")
             run(
-                load_instances(),
+                filter_instances_by_splits(load_instances(), args.splits),
                 api_key=args.api_key,
                 base_url=args.base_url,
                 model=args.model,
@@ -204,17 +245,19 @@ def main():
             from .splitter import select_hallucination_targets
             from .swebench_loader import load_instances
 
-            instances = load_instances()
-            formats = load_jsonl_dict(FORMATS_PATH)
-            queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
-            docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
+            instances = filter_instances_by_splits(load_instances(), args.splits)
+            formats = load_jsonl_dict(config.FORMATS_PATH)
+            queries = load_jsonl_dict(config.QUERIES_PATH, value_key="query")
+            docs = load_jsonl_dict(config.DOCS_PATH, value_key="docs")
             targets = select_hallucination_targets(instances)
             to_inject = [i for i in instances if i["instance_id"] in targets]
+            sc = load_source_cache([i["instance_id"] for i in to_inject])
             run(
                 to_inject,
                 formats,
                 queries,
                 docs=docs,
+                source_cache=sc,
                 api_key=args.api_key,
                 base_url=args.base_url,
                 model=args.model,
@@ -224,18 +267,18 @@ def main():
             from .splitter import select_hallucination_targets
             from .swebench_loader import load_instances
 
-            instances = load_instances()
-            queries = load_jsonl_dict(QUERIES_PATH, value_key="query")
-            docs = load_jsonl_dict(DOCS_PATH, value_key="docs")
-            formats = load_jsonl_dict(FORMATS_PATH)
-            hallucinations = load_jsonl_dict(HALLUCINATED_PATH)
+            instances = filter_instances_by_splits(load_instances(), args.splits)
+            queries = load_jsonl_dict(config.QUERIES_PATH, value_key="query")
+            docs = load_jsonl_dict(config.DOCS_PATH, value_key="docs")
+            formats = load_jsonl_dict(config.FORMATS_PATH)
+            hallucinations = load_jsonl_dict(config.HALLUCINATED_PATH)
             targets = select_hallucination_targets(instances)
             run(instances, queries, docs, formats, hallucinations, targets)
         elif phase == 8:
             from .splitter import run
             from .swebench_loader import load_instances
 
-            run(load_instances())
+            run(filter_instances_by_splits(load_instances(), args.splits))
         elif phase == 9:
             from .validator import run
 
